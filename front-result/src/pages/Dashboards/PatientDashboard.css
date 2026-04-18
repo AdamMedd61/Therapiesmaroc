@@ -1,0 +1,300 @@
+/* Patient Dashboard */
+
+.dashboard-page {
+  min-height: 100vh;
+  background: var(--color-bg);
+  padding-bottom: var(--space-20);
+}
+
+.dashboard-hero {
+  background: var(--color-primary-bg);
+  padding: var(--space-12) 0 var(--space-8);
+  border-bottom: 1px solid var(--color-primary-light);
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cg fill='none' stroke='%232D6A4F' stroke-opacity='0.1' stroke-width='1'%3E%3Cpath d='M20 0 L40 20 L20 40 L0 20 Z'/%3E%3Cpath d='M20 8 L32 20 L20 32 L8 20 Z'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.dashboard-hero-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-welcome h1 {
+  font-size: var(--font-size-3xl);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.dashboard-welcome p {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
+}
+
+.dashboard-stats-row {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  min-width: 220px;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.stat-icon-accent {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.stat-info { display: flex; flex-direction: column; }
+
+.stat-value {
+  font-size: var(--font-size-2xl);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-text);
+}
+
+.stat-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+@media (min-width: 768px) {
+  .dashboard-hero-inner {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
+/* Tabs */
+.dashboard-content { margin-top: calc(-1 * var(--space-6)); position: relative; z-index: 10; }
+
+.dashboard-tabs-nav {
+  display: flex;
+  background: var(--color-surface);
+  padding: var(--space-2);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+  gap: var(--space-2);
+  overflow-x: auto;
+  margin-bottom: var(--space-8);
+}
+
+.dashboard-tabs-nav::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  white-space: nowrap;
+  padding: var(--space-3) var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-lg);
+  border: none;
+  background: transparent;
+  font-family: var(--font-base);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex: 1;
+  justify-content: center;
+}
+
+.tab-btn:hover { background: var(--color-bg); color: var(--color-text); }
+.tab-btn.active { background: var(--color-primary); color: #fff; }
+
+/* Dashboard Sections */
+.section-header { margin-bottom: var(--space-6); }
+.section-header h2 { font-size: var(--font-size-xl); font-weight: 700; margin-bottom: var(--space-1); }
+
+/* Sessions List */
+.sessions-list { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.session-card {
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.session-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.session-card-main .avatar { background: var(--color-primary-light); color: var(--color-primary); font-weight: 800; font-size: var(--font-size-xl); }
+
+.session-info h3 { font-size: var(--font-size-lg); font-weight: 700; margin-bottom: 2px; }
+.session-type { font-size: var(--font-size-sm); color: var(--color-accent); font-weight: 600; margin-bottom: var(--space-3); }
+.session-meta { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.session-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.session-actions-row { display: flex; gap: var(--space-3); }
+
+@media (min-width: 768px) {
+  .session-card { flex-direction: row; justify-content: space-between; align-items: center; }
+  .session-actions { padding-top: 0; border-top: none; width: 300px; }
+}
+
+/* Therapist Card Mini */
+.therapist-card-mini { padding: var(--space-6); }
+.therapist-card-mini-inner { display: flex; gap: var(--space-4); align-items: center; }
+.therapist-card-mini-inner .avatar { background: var(--color-primary-light); color: var(--color-primary); font-weight: 800; font-size: var(--font-size-2xl); }
+.therapist-card-mini-inner h3 { font-size: var(--font-size-lg); font-weight: 700; }
+.therapist-card-mini-inner p { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+
+/* Courses List */
+.course-card {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.course-icon {
+  width: 56px;
+  height: 56px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.course-info h3 { font-weight: 700; font-size: var(--font-size-lg); }
+.course-actions { display: flex; align-items: center; justify-content: space-between; margin-top: var(--space-2); }
+.course-price { font-size: var(--font-size-xl); font-weight: 800; color: var(--color-primary); }
+
+@media (min-width: 600px) {
+  .course-card { flex-direction: row; align-items: center; justify-content: space-between; }
+  .course-info { flex: 1; }
+  .course-actions { margin-top: 0; gap: var(--space-4); }
+}
+
+/* Files List */
+.file-row {
+  display: flex;
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border-light);
+  gap: var(--space-4);
+  transition: background var(--transition-fast);
+}
+
+.file-row:last-child { border-bottom: none; }
+.file-row:hover { background: var(--color-bg); }
+
+.file-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--color-primary-bg);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.file-info { flex: 1; }
+.file-info h4 { font-weight: 600; font-size: var(--font-size-sm); margin-bottom: 2px; }
+.file-info p { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+
+/* Quick Actions */
+.dashboard-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  margin-top: var(--space-12);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (min-width: 768px) {
+  .dashboard-quick-actions { grid-template-columns: repeat(3, 1fr); }
+}
+
+.quick-action-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  text-decoration: none;
+  color: var(--color-text);
+  transition: all var(--transition-fast);
+}
+
+.quick-action-card:hover {
+  border-color: var(--color-primary-light);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+
+.quick-action-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bg-gray { background: var(--color-bg); color: var(--color-text-muted); }
+
+.quick-action-card h4 { font-weight: 700; margin-bottom: 4px; }
+.quick-action-card p { font-size: var(--font-size-sm); color: var(--color-text-muted); }
