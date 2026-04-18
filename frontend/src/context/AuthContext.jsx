@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
+import { getCurrentUser, logout as apiLogout } from '../services/auth';
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -7,34 +9,44 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check local storage for persisted auth
-    const storedUser = localStorage.getItem('therapies_maroc_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        localStorage.removeItem('therapies_maroc_user');
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const userData = await getCurrentUser();
+          setUser(userData);
+        } catch (e) {
+          localStorage.removeItem('token');
+          setUser(null);
+        }
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+    initAuth();
   }, []);
 
-  const login = (userData) => {
+  const login = (userData, token) => {
     setUser(userData);
-    localStorage.setItem('therapies_maroc_user', JSON.stringify(userData));
+    if (token) {
+      localStorage.setItem('token', token);
+    }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('therapies_maroc_user');
+  const logout = async () => {
+    try {
+      if (localStorage.getItem('token')) {
+         await apiLogout();
+      }
+    } catch (e) {
+      console.error("Logout error", e);
+    } finally {
+      setUser(null);
+      localStorage.removeItem('token');
+    }
   };
 
   const updateUser = (partialData) => {
-    setUser(prev => {
-      const updated = { ...prev, ...partialData };
-      localStorage.setItem('therapies_maroc_user', JSON.stringify(updated));
-      return updated;
-    });
+    setUser(prev => ({ ...prev, ...partialData }));
   };
 
   const value = {

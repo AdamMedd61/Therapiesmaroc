@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Eye, EyeOff, ArrowRight, Lock, Mail } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import * as authService from '../../services/auth';
 import logoImg from '../../../image.png';
 import './AuthPages.css';
 
@@ -18,15 +19,16 @@ export default function LoginPage() {
     e.preventDefault();
     if (!email || !password) { toast.error('Veuillez remplir tous les champs.'); return; }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    const therapistKeywords = ['pro', 'doc', 'dr', 'therapist', 'therapeute', 'medecin', 'psy'];
-    const isTherapist = therapistKeywords.some(kw => email.toLowerCase().includes(kw));
-    const role = isTherapist ? 'therapist' : 'patient';
-    const name = email.split('@')[0];
-    const id   = isTherapist ? 'therapist-demo-1' : 'patient-demo-1';
-    login({ email, name, role, id });
-    toast.success(`Bienvenue, ${name} !`);
-    navigate(role === 'therapist' ? '/therapeute/dashboard' : '/patient/dashboard');
+    try {
+      const response = await authService.login(email, password);
+      login(response.user, response.token);
+      toast.success(`Bienvenue, ${response.user.name} !`);
+      navigate(response.user.role === 'therapist' ? '/therapeute/dashboard' : '/patient/dashboard');
+    } catch (err) {
+      toast.error('Échec de la connexion. Vérifiez vos identifiants.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

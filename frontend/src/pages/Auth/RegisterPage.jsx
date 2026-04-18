@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Eye, EyeOff, ArrowRight, Lock, Mail, User, Phone, MapPin } from 'lucide-react';
+import * as authService from '../../services/auth';
 import logoImg from '../../../image.png';
 import './AuthPages.css';
 
@@ -23,9 +24,24 @@ export default function RegisterPage() {
       toast.error('Veuillez entrer un numéro CIN valide (6 à 10 caractères).'); return;
     }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 900));
-    toast.success('Compte créé avec succès ! Bienvenue sur TherapiesMaroc.');
-    navigate('/therapeutes');
+    try {
+      const userData = {
+        name: `${form.prenom} ${form.nom}`.trim(),
+        email: form.email,
+        password: form.password,
+        role: 'patient',
+        CIN: form.cin || null,
+        location: null,
+      };
+      
+      const response = await authService.register(userData);
+      toast.success('Compte créé avec succès ! Bienvenue sur TherapiesMaroc.');
+      navigate('/connexion');
+    } catch (err) {
+      toast.error('Erreur lors de la création du compte. Vérifiez vos informations.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

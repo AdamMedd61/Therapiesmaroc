@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('password');
             $table->string('location')->nullable();
             $table->date('date_of_birth')->nullable();
-            $table->enum('role', ['client', 'therapist'])->default('client');
+            $table->enum('role', ['patient', 'therapist'])->default('patient');
             $table->string('CIN')->nullable()->unique();
             $table->rememberToken();
             $table->timestamps();
