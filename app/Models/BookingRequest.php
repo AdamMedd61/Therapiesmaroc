@@ -36,4 +36,9 @@ class BookingRequest extends Model
     {
         return $this->belongsTo(Service::class);
     }
+
+    public function payment()
+    {
+        return $this->hasOne(Payment::class, 'request_id');
+    }
 }

@@ -198,11 +198,12 @@ class BookingRequestController extends Controller
 
     /**
      * Cancel a paid booking (patient or therapist) — forbidden within 48 h of session.
+     * Issues a full Stripe refund automatically.
      */
     public function cancel(Request $request, string $id)
     {
         $user           = $request->user();
-        $bookingRequest = BookingRequest::with('schedule')->findOrFail($id);
+        $bookingRequest = BookingRequest::with(['schedule', 'payment'])->findOrFail($id);
 
         // Authorization: only the owning patient or therapist
         if ($user->role === 'patient') {
@@ -232,6 +233,22 @@ class BookingRequestController extends Controller
             }
         }
 
+        // Issue Stripe refund if a payment intent exists
+        $payment = $bookingRequest->payment;
+        if ($payment && $payment->stripe_payment_intent_id) {
+            try {
+                \Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
+                \Stripe\Refund::create([
+                    'payment_intent' => $payment->stripe_payment_intent_id,
+                ]);
+                $payment->update(['status' => 'refunded']);
+            } catch (\Stripe\Exception\ApiErrorException $e) {
+                return response()->json([
+                    'message' => 'Remboursement Stripe échoué : ' . $e->getMessage(),
+                ], 500);
+            }
+        }
+
         DB::transaction(function () use ($bookingRequest) {
             // Free the schedule slot
             if ($bookingRequest->schedule) {
@@ -241,6 +258,6 @@ class BookingRequestController extends Controller
             $bookingRequest->update(['status' => 'cancelled']);
         });
 
-        return response()->json(['message' => 'Séance annulée avec succès.']);
+        return response()->json(['message' => 'Séance annulée et remboursement effectué.']);
     }
 }
