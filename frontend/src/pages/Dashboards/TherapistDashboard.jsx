@@ -135,6 +135,18 @@ export default function TherapistDashboard() {
       .catch(() => {});
   }, []);
 
+  // ── Cancel session handler ──
+  const cancelSession = async (reqId) => {
+    if (!window.confirm('Annuler cette séance ? Cette action est irréversible.')) return;
+    try {
+      await api.post(`/requests/${reqId}/cancel`);
+      setPaidRequests(prev => prev.filter(r => r.id !== reqId));
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'Erreur lors de l\'annulation.';
+      alert(msg);
+    }
+  };
+
   // ── Paid requests (consultations tab) + payments (revenus tab) ──
   const [paidRequests, setPaidRequests] = useState([]);
   const [paidReqLoading, setPaidReqLoading] = useState(false);
@@ -659,9 +671,19 @@ export default function TherapistDashboard() {
                               ? <span className="t-session-badge online"><Video size={12}/> Vidéo</span>
                               : <span className="t-session-badge cabinet">Cabinet</span>
                             }
-                            {isToday && req.schedule?.mode === 'online' && (
-                              <button className="btn btn-primary btn-sm ml-2" onClick={() => navigate(`/appel?with=${encodeURIComponent(req.client?.user?.name || '')}&type=${encodeURIComponent(req.service?.name || '')}`)}>Lancer</button>
-                            )}
+                            {(() => {
+                              const hoursUntil = (new Date(req.schedule?.session_date) - new Date()) / 36e5;
+                              const locked = hoursUntil < 48;
+                              return (
+                                <button
+                                  className="btn btn-sm ml-2"
+                                  style={{ background: locked ? '#f3f4f6' : '#fee2e2', color: locked ? '#9ca3af' : '#dc2626', border: '1px solid', borderColor: locked ? '#e5e7eb' : '#fca5a5', cursor: locked ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+                                  disabled={locked}
+                                  title={locked ? 'Annulation impossible moins de 48h avant la séance' : 'Annuler cette séance'}
+                                  onClick={() => !locked && cancelSession(req.id)}
+                                >Annuler</button>
+                              );
+                            })()}
                           </div>
                         </div>
                       );
@@ -763,12 +785,19 @@ export default function TherapistDashboard() {
                         }
                         {isPast
                           ? <span className="badge badge-outline" style={{ marginLeft: 8 }}>Terminée</span>
-                          : req.schedule?.mode === 'online' && (
-                              <button
-                                className="btn btn-primary btn-sm ml-2"
-                                onClick={() => navigate(`/appel?with=${encodeURIComponent(req.client?.user?.name || '')}&type=${encodeURIComponent(req.service?.name || '')}`)}
-                              >Lancer</button>
-                            )
+                          : (() => {
+                              const hoursUntil = (new Date(req.schedule?.session_date) - new Date()) / 36e5;
+                              const locked = hoursUntil < 48;
+                              return (
+                                <button
+                                  className="btn btn-sm ml-2"
+                                  style={{ background: locked ? '#f3f4f6' : '#fee2e2', color: locked ? '#9ca3af' : '#dc2626', border: '1px solid', borderColor: locked ? '#e5e7eb' : '#fca5a5', cursor: locked ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+                                  disabled={locked}
+                                  title={locked ? 'Annulation impossible moins de 48h avant la séance' : 'Annuler cette séance'}
+                                  onClick={() => !locked && cancelSession(req.id)}
+                                >Annuler</button>
+                              );
+                            })()
                         }
                       </div>
                     </div>

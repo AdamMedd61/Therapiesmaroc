@@ -38,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('services', ServiceController::class);
     Route::apiResource('files', PatientFileController::class);
     Route::apiResource('requests', BookingRequestController::class);
+    Route::post('/requests/{id}/cancel', [BookingRequestController::class, 'cancel']);
     Route::apiResource('therapists', TherapistController::class)->only(['update', 'destroy']);
     Route::apiResource('clients', ClientController::class);
     Route::apiResource('reviews', ReviewController::class);

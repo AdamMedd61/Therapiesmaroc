@@ -195,4 +195,52 @@ class BookingRequestController extends Controller
 
         return response()->json(['message' => 'Demande supprimée.']);
     }
+
+    /**
+     * Cancel a paid booking (patient or therapist) — forbidden within 48 h of session.
+     */
+    public function cancel(Request $request, string $id)
+    {
+        $user           = $request->user();
+        $bookingRequest = BookingRequest::with('schedule')->findOrFail($id);
+
+        // Authorization: only the owning patient or therapist
+        if ($user->role === 'patient') {
+            if (!$user->client || $bookingRequest->client_id !== $user->client->id) {
+                return response()->json(['message' => 'Non autorisé.'], 403);
+            }
+        } elseif ($user->role === 'therapist') {
+            if (!$user->therapist || $bookingRequest->therapist_id !== $user->therapist->id) {
+                return response()->json(['message' => 'Non autorisé.'], 403);
+            }
+        } else {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        // Must be a paid request
+        if ($bookingRequest->status !== 'paid') {
+            return response()->json(['message' => 'Seules les séances payées peuvent être annulées.'], 422);
+        }
+
+        // 48-hour rule: cannot cancel within 48 h of the session
+        if ($bookingRequest->schedule) {
+            $sessionDate = \Carbon\Carbon::parse($bookingRequest->schedule->session_date);
+            if ($sessionDate->diffInHours(now(), false) > -48) {
+                return response()->json([
+                    'message' => 'Impossible d\'annuler une séance dans les 48 h précédant la consultation.',
+                ], 422);
+            }
+        }
+
+        DB::transaction(function () use ($bookingRequest) {
+            // Free the schedule slot
+            if ($bookingRequest->schedule) {
+                $bookingRequest->schedule->update(['status' => 'available']);
+            }
+            // Cancel the request
+            $bookingRequest->update(['status' => 'cancelled']);
+        });
+
+        return response()->json(['message' => 'Séance annulée avec succès.']);
+    }
 }
