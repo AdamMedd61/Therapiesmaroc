@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { MapPin, Video, Building2, Star, Clock, Shield, MessageCircle, Calendar, Globe, ChevronLeft, ChevronRight } from 'lucide-react';
-import { therapists } from '../../data/therapists';
+import { MapPin, Video, Building2, Star, Clock, Shield, MessageCircle, Calendar, Globe, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import api from '../../services/api';
 import './TherapistProfilePage.css';
 
 const TABS = [
@@ -39,7 +39,97 @@ export default function TherapistProfilePage() {
     return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   };
 
-  const therapist = therapists.find(t => t.id === id) || therapists[0];
+  const [therapist, setTherapist] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Compute slots for the currently viewed week
+  const getWeekBounds = (offset) => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - day + 1 + offset * 7); // Monday
+    const start = new Date(d);
+    d.setDate(d.getDate() + 6); // Sunday
+    const end = new Date(d);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  };
+
+  const slotsForWeek = useMemo(() => {
+    if (!therapist?.rawSlots) return [];
+    const { start, end } = getWeekBounds(weekOffset);
+    const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    const byDay = {};
+    therapist.rawSlots.forEach(slot => {
+      const d = new Date(slot.session_date);
+      if (d < start || d > end) return;
+      const dayStr = dayNames[d.getDay()];
+      const timeStr = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+      const dateLabel = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      if (!byDay[dayStr]) byDay[dayStr] = { day: dayStr, dateLabel, slots: [] };
+      byDay[dayStr].slots.push(timeStr);
+    });
+    return Object.values(byDay).sort((a, b) => {
+      const order = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+      return order.indexOf(a.day) - order.indexOf(b.day);
+    });
+  }, [therapist, weekOffset]);
+
+  useEffect(() => {
+    api.get(`/therapists/${id}`).then(res => {
+      const t = res.data;
+      
+      const modes = [...new Set((t.services || []).map(s => s.mode).flatMap(m => m === 'both' ? ['online', 'cabinet'] : [m]))];
+      if(modes.length === 0) modes.push('online');
+
+      setTherapist({
+        id: t.id,
+        name: t.name || 'Dr.',
+        title: t.specialization || 'Thérapeute',
+        specialties: (t.specialties && t.specialties.length > 0) ? t.specialties : [t.specialization || 'Général'],
+        city: t.location || 'Casablanca',
+        languages: (t.languages && t.languages.length > 0) ? t.languages : ['Français', 'Arabe'],
+        modes: modes,
+        rating: 5.0,
+        reviewCount: 0,
+        bio: t.bio || "Ceci est une description générée par le système pour ce thérapeute. Le thérapeute peut modifier cette présentation dans ses paramètres.",
+        approach: t.approach || "Approche personnalisée centrée sur le bien-être du patient.",
+        education: (t.education && t.education.length > 0) ? t.education : ["Diplôme accrédité en thérapie"],
+        yearsExperience: t.experience || 0,
+        services: (t.services || []).map(s => ({
+          id: s.id,
+          name: s.name,
+          duration: s.duration && s.duration.replace(' min', ''),
+          price: Number(s.price),
+          modes: s.mode === 'both' ? ['online', 'cabinet'] : [s.mode]
+        })),
+        rawSlots: t.available_slots || [],
+        reviews: [],
+      });
+    }).catch(err => {
+      console.error(err);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
+        <Loader2 className="animate-spin" size={40} style={{ color: 'var(--color-primary)' }} />
+        <p style={{ marginTop: 16 }}>Chargement du profil...</p>
+      </div>
+    );
+  }
+
+  if (!therapist) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
+        <h2>Thérapeute introuvable</h2>
+        <button className="btn btn-primary" onClick={() => navigate(-1)} style={{ marginTop: 16 }}>Retour</button>
+      </div>
+    );
+  }
 
   const initials = therapist.name.split(' ').slice(-2).map(n => n[0]).join('');
 
@@ -240,13 +330,13 @@ export default function TherapistProfilePage() {
                   </div>
 
                   {/* Slots table */}
-                  {therapist.availableSlots && therapist.availableSlots.length > 0 ? (
-                    <div className="profile-slots-grid" style={{ gridTemplateColumns: `repeat(${therapist.availableSlots.length}, 1fr)` }}>
-                      {therapist.availableSlots.map(dayObj => (
+                  {slotsForWeek.length > 0 ? (
+                    <div className="profile-slots-grid" style={{ gridTemplateColumns: `repeat(${slotsForWeek.length}, 1fr)` }}>
+                      {slotsForWeek.map(dayObj => (
                         <div key={dayObj.day} className="profile-day-col">
                           <div className={`profile-day-header ${selectedSlotDay === dayObj.day ? 'active' : ''}`}>
                             <span className="profile-day-name">{dayObj.day}</span>
-                            <span className="profile-day-date">{getDayDateLabel(dayObj.day, weekOffset)}</span>
+                            <span className="profile-day-date">{dayObj.dateLabel}</span>
                           </div>
                           <div className="profile-slots">
                             {dayObj.slots.map(slot => (

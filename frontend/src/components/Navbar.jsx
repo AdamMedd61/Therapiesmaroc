@@ -267,7 +267,7 @@ export default function Navbar() {
           {user && (
             <>
               <NavLink 
-                to="/reservations" 
+                to={user.role === 'therapist' ? '/therapeute/dashboard' : '/patient/dashboard'} 
                 className="navbar-mobile-link" 
                 onClick={() => setMobileOpen(false)}
                 style={{ display: 'flex', justifyContent: 'space-between' }}

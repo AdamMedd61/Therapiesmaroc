@@ -3,6 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Calendar, Video, MessageSquare, Users, DollarSign, Star, ChevronRight, ChevronLeft, Copy, ClipboardPaste, Plus, X, Pencil, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
+import * as scheduleApi from '../../services/schedule';
+import * as serviceApi from '../../services/serviceApi';
+import api from '../../services/api';
 import './TherapistDashboard.css';
 
 const DURATIONS = ['30 min', '45 min', '50 min', '60 min', '90 min'];
@@ -107,18 +110,9 @@ function NewBookingModal({ onClose, onSave }) {
   );
 }
 
-const upcomingSessions = [
-  { id: 's1', clientName: 'Sara L.', time: '14:00', date: 'Aujourd\'hui', duration: '50 min', type: 'online', reason: 'Gestion du stress' },
-  { id: 's2', clientName: 'Karim M.', time: '16:30', date: 'Aujourd\'hui', duration: '60 min', type: 'cabinet', reason: 'Thérapie de couple' },
-  { id: 's3', clientName: 'Yasmine R.', time: '10:00', date: 'Demain', duration: '50 min', type: 'online', reason: 'Suivi dépression' },
-];
+const upcomingSessions = [];
 
-const recentClients = [
-  { id: 'c1', name: 'Sara L.', lastSession: 'Il y a 2 jours', avatar: 'bg-primary-light text-primary' },
-  { id: 'c2', name: 'Karim M.', lastSession: 'Il y a 1 semaine', avatar: 'bg-accent text-white' },
-  { id: 'c3', name: 'Yasmine R.', lastSession: 'Il y a 3 jours', avatar: 'bg-gray text-muted' },
-  { id: 'c4', name: 'Hassan T.', lastSession: 'Hier', avatar: 'bg-primary text-white' },
-];
+const recentClients = [];
 
 export default function TherapistDashboard() {
   const navigate = useNavigate();
@@ -126,6 +120,8 @@ export default function TherapistDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [modalOpen, setModalOpen] = useState(false);
   const [sessions, setSessions] = useState(upcomingSessions);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [servicesLoading, setServicesLoading] = useState(false);
 
   /* ── Planning state ── */
   const DAYS = [
@@ -143,6 +139,25 @@ export default function TherapistDashboard() {
     0: DAYS.reduce((acc, d) => ({ ...acc, [d.id]: [] }), {})
   });
   const planning = planningByWeek[weekOffset] || DAYS.reduce((acc, d) => ({ ...acc, [d.id]: [] }), {});
+
+  // ── Load schedules from API on mount ──
+  useEffect(() => {
+    setScheduleLoading(true);
+    scheduleApi.getMySchedule()
+      .then(slots => {
+        const byWeek = {};
+        slots.forEach(slot => {
+          const wo = slot.weekOffset ?? 0;
+          if (!byWeek[wo]) byWeek[wo] = DAYS.reduce((acc, d) => ({ ...acc, [d.id]: [] }), {});
+          byWeek[wo][slot.day] = [...(byWeek[wo][slot.day] || []), slot].sort((a, b) => a.startTime.localeCompare(b.startTime));
+        });
+        if (Object.keys(byWeek).length === 0) byWeek[0] = DAYS.reduce((acc, d) => ({ ...acc, [d.id]: [] }), {});
+        setPlanningByWeek(byWeek);
+      })
+      .catch(() => toast.error('Impossible de charger le planning.'))
+      .finally(() => setScheduleLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Clipboard: { type: 'day', dayId, slots } | { type: 'week', weeks }
   const [clipboard, setClipboard] = useState(null);
@@ -259,35 +274,67 @@ export default function TherapistDashboard() {
   };
 
   // ── My services (name + duration + price + mode) ──
-  const [myServices, setMyServices] = useState([
-    { id: 'srv1', name: 'Consultation individuelle', duration: '55 min', price: 450, mode: 'both' },
-    { id: 'srv2', name: 'Thérapie de couple',        duration: '60 min', price: 600, mode: 'both' },
-    { id: 'srv3', name: 'Consultation initiale',     duration: '30 min', price: 300, mode: 'online' },
-  ]);
+  const [myServices, setMyServices] = useState([]);
   const emptyService = { name: '', duration: '45 min', price: '', mode: 'both' };
   const [addingService, setAddingService] = useState(false);
   const [newServiceForm, setNewServiceForm] = useState(emptyService);
   const [editingServiceId, setEditingServiceId] = useState(null);
   const [editServiceForm, setEditServiceForm] = useState({});
 
-  const commitAddService = () => {
+  // Load services from API on mount
+  useEffect(() => {
+    setServicesLoading(true);
+    serviceApi.getMyServices()
+      .then(data => setMyServices(data.map(s => ({ ...s, id: String(s.id) }))))
+      .catch(() => toast.error('Impossible de charger les services.'))
+      .finally(() => setServicesLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const commitAddService = async () => {
     if (!newServiceForm.name.trim()) { toast.error('Veuillez saisir un nom de service.'); return; }
     if (!newServiceForm.price || isNaN(Number(newServiceForm.price))) { toast.error('Veuillez saisir un prix valide.'); return; }
-    setMyServices(prev => [...prev, { ...newServiceForm, id: `srv-${Date.now()}`, price: Number(newServiceForm.price) }]);
-    setNewServiceForm(emptyService);
-    setAddingService(false);
-    toast.success('Service ajouté !');
+    try {
+      const created = await serviceApi.createService({
+        name: newServiceForm.name,
+        duration: newServiceForm.duration,
+        price: Number(newServiceForm.price),
+        mode: newServiceForm.mode,
+      });
+      setMyServices(prev => [...prev, { ...created, id: String(created.id) }]);
+      setNewServiceForm(emptyService);
+      setAddingService(false);
+      toast.success('Service ajouté !');
+    } catch {
+      toast.error('Erreur lors de la création du service.');
+    }
   };
 
-  const removeService = (id) => {
-    setMyServices(prev => prev.filter(s => s.id !== id));
+  const removeService = async (id) => {
+    try {
+      await serviceApi.deleteService(id);
+      setMyServices(prev => prev.filter(s => s.id !== id));
+      toast.success('Service supprimé.');
+    } catch {
+      toast.error('Erreur lors de la suppression du service.');
+    }
   };
 
-  const saveServiceEdit = () => {
+  const saveServiceEdit = async () => {
     if (!editServiceForm.name.trim()) { toast.error('Veuillez saisir un nom.'); return; }
-    setMyServices(prev => prev.map(s => s.id === editingServiceId ? { ...editServiceForm, price: Number(editServiceForm.price) } : s));
-    setEditingServiceId(null);
-    toast.success('Service mis à jour !');
+    try {
+      const updated = await serviceApi.updateService(editingServiceId, {
+        name: editServiceForm.name,
+        duration: editServiceForm.duration,
+        price: Number(editServiceForm.price),
+        mode: editServiceForm.mode,
+      });
+      setMyServices(prev => prev.map(s => s.id === editingServiceId ? { ...updated, id: String(updated.id) } : s));
+      setEditingServiceId(null);
+      toast.success('Service mis à jour !');
+    } catch {
+      toast.error('Erreur lors de la mise à jour du service.');
+    }
   };
 
   const emptySlot = { day: 'lun', startTime: '', mode: 'online', serviceIds: [] };
@@ -311,7 +358,7 @@ export default function TherapistDashboard() {
     return () => { document.body.style.overflow = ''; };
   }, [modalOpen, editingId]);
 
-  const addSlot = () => {
+  const addSlot = async () => {
     if (!newSlot.startTime) {
       toast.error('Veuillez choisir une heure de début.'); return;
     }
@@ -327,16 +374,35 @@ export default function TherapistDashboard() {
       toast.error('Un créneau à cette heure existe déjà ce jour-là.');
       return;
     }
-    const slot = { id: `sl-${Date.now()}`, ...newSlot };
-    setPlanning(prev => ({
-      ...prev,
-      [newSlot.day]: [...(prev[newSlot.day] || []), slot].sort((a, b) => a.startTime.localeCompare(b.startTime))
-    }));
-    toast.success('Créneau ajouté !');
+    try {
+      const created = await scheduleApi.createSlot({
+        day: newSlot.day,
+        week_offset: weekOffset,
+        start_time: newSlot.startTime,
+        mode: newSlot.mode,
+        service_ids: newSlot.serviceIds,
+      });
+      const slot = { id: String(created.id), day: newSlot.day, startTime: newSlot.startTime, mode: newSlot.mode, serviceIds: newSlot.serviceIds, weekOffset };
+      setPlanning(prev => ({
+        ...prev,
+        [newSlot.day]: [...(prev[newSlot.day] || []), slot].sort((a, b) => a.startTime.localeCompare(b.startTime))
+      }));
+      toast.success('Créneau ajouté !');
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'Erreur lors de la création du créneau.';
+      toast.error(msg);
+    }
   };
 
-  const removeSlot = (day, id) => {
-    setPlanning(prev => ({ ...prev, [day]: prev[day].filter(s => s.id !== id) }));
+  const removeSlot = async (day, id) => {
+    try {
+      await scheduleApi.deleteSlot(id);
+      setPlanning(prev => ({ ...prev, [day]: prev[day].filter(s => s.id !== id) }));
+      toast.success('Créneau supprimé.');
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'Erreur lors de la suppression.';
+      toast.error(msg);
+    }
   };
 
   const startEdit = (slot) => {
@@ -344,14 +410,25 @@ export default function TherapistDashboard() {
     setEditForm({ ...slot, serviceIds: slot.serviceIds ? [...slot.serviceIds] : [] });
   };
 
-  const saveEdit = (day) => {
-    setPlanning(prev => ({
-      ...prev,
-      [day]: prev[day].map(s => s.id === editingId ? { ...editForm } : s)
-        .sort((a, b) => a.startTime.localeCompare(b.startTime))
-    }));
-    setEditingId(null);
-    toast.success('Créneau mis à jour !');
+  const saveEdit = async (day) => {
+    try {
+      await scheduleApi.updateSlot(editingId, {
+        day,
+        week_offset: weekOffset,
+        start_time: editForm.startTime,
+        mode: editForm.mode,
+        service_ids: editForm.serviceIds,
+      });
+      setPlanning(prev => ({
+        ...prev,
+        [day]: prev[day].map(s => s.id === editingId ? { ...editForm } : s)
+          .sort((a, b) => a.startTime.localeCompare(b.startTime))
+      }));
+      setEditingId(null);
+      toast.success('Créneau mis à jour !');
+    } catch {
+      toast.error('Erreur lors de la mise à jour du créneau.');
+    }
   };
 
   const toggleServiceInEdit = (srvId) => {
@@ -482,28 +559,28 @@ export default function TherapistDashboard() {
                 <div className="t-stat-icon bg-primary-light text-primary"><Calendar size={24} /></div>
                 <div className="t-stat-info">
                   <span className="t-stat-label">Aujourd'hui</span>
-                  <div><span className="t-stat-value">3</span><span className="t-stat-trend text-green">+1</span></div>
+                  <div><span className="t-stat-value">0</span></div>
                 </div>
               </div>
               <div className="t-stat-card">
                 <div className="t-stat-icon bg-blue-light text-blue"><Users size={24} /></div>
                 <div className="t-stat-info">
                   <span className="t-stat-label">Patients Actifs</span>
-                  <div><span className="t-stat-value">24</span><span className="t-stat-trend text-green">+3</span></div>
+                  <div><span className="t-stat-value">0</span></div>
                 </div>
               </div>
               <div className="t-stat-card">
                 <div className="t-stat-icon bg-green-light text-green"><DollarSign size={24} /></div>
                 <div className="t-stat-info">
                   <span className="t-stat-label">Revenus (Mois)</span>
-                  <div><span className="t-stat-value">12.4k</span><span className="t-stat-trend text-green">+8%</span></div>
+                  <div><span className="t-stat-value">0</span></div>
                 </div>
               </div>
               <div className="t-stat-card">
                 <div className="t-stat-icon bg-orange-light text-orange"><Star size={24} /></div>
                 <div className="t-stat-info">
                   <span className="t-stat-label">Note Moyenne</span>
-                  <div><span className="t-stat-value">4.9</span></div>
+                  <div><span className="t-stat-value">0.0</span></div>
                 </div>
               </div>
             </div>
@@ -534,12 +611,19 @@ export default function TherapistDashboard() {
                         ) : (
                           <span className="t-session-badge cabinet">Cabinet ({session.duration})</span>
                         )}
-                        {session.date === 'Aujourd\'hui' && session.type === 'online' && (
+                        {session.date === "Aujourd'hui" && session.type === 'online' && (
                           <button className="btn btn-primary btn-sm ml-2" onClick={() => navigate(`/appel?with=${encodeURIComponent(session.clientName)}&type=${encodeURIComponent(session.reason)}`)}>Lancer</button>
                         )}
                       </div>
                     </div>
                   ))}
+                  {upcomingSessions.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--color-text-muted)' }}>
+                      <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
+                      <p style={{ fontWeight: 600, marginBottom: 4 }}>Aucune séance planifiée</p>
+                      <p style={{ fontSize: 13 }}>Vos prochaines consultations apparaîtront ici.</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -565,6 +649,13 @@ export default function TherapistDashboard() {
                       </button>
                     </div>
                   ))}
+                  {recentClients.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--color-text-muted)' }}>
+                      <div style={{ fontSize: 36, marginBottom: 10 }}>👤</div>
+                      <p style={{ fontWeight: 600, marginBottom: 4 }}>Aucun patient récent</p>
+                      <p style={{ fontSize: 13 }}>Vos patients apparaîtront ici après leur première séance.</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -606,16 +697,21 @@ export default function TherapistDashboard() {
                   </div>
                 </div>
               ))}
+              {sessions.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+                  <div style={{ fontSize: 44, marginBottom: 12 }}>📵</div>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>Aucune consultation à venir</h3>
+                  <p style={{ color: 'var(--color-text-muted)', marginBottom: 20, maxWidth: 320, margin: '0 auto 20px' }}>Vous n'avez pas encore de séance planifiée. Ajoutez-en une manuellement ou attendez qu'un patient réserve.</p>
+                  <button className="btn btn-primary" onClick={() => setModalOpen(true)}><Plus size={15} /> Nouvelle séance</button>
+                </div>
+              )}
             </div>
 
             <div className="t-section-title" style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>
               <h3>Séances passées</h3>
             </div>
             <div className="t-sessions">
-              {[
-                { id: 'p1', clientName: 'Hassan T.', time: '11:00', date: 'Hier', duration: '50 min', type: 'cabinet', reason: 'TCC' },
-                { id: 'p2', clientName: 'Nadia B.', time: '09:30', date: 'Lundi', duration: '60 min', type: 'online', reason: 'Anxiété' },
-              ].map(session => (
+              {[].map(session => (
                 <div key={session.id} className="t-session-line" style={{ opacity: 0.7 }}>
                   <div className="t-session-left">
                     <div className="t-session-time" style={{ color: 'var(--color-text-muted)' }}>{session.time}</div>
@@ -629,6 +725,9 @@ export default function TherapistDashboard() {
                   </div>
                 </div>
               ))}
+              <div style={{ textAlign: 'center', padding: '32px 24px', color: 'var(--color-text-muted)' }}>
+                <p style={{ fontSize: 13 }}>L'historique de vos consultations apparaîtra ici.</p>
+              </div>
             </div>
           </div>
         )}
@@ -642,13 +741,7 @@ export default function TherapistDashboard() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                { id: 'c1', name: 'Sara L.',     initials: 'SL', lastSession: 'Il y a 2 jours',   sessions: 8,  status: 'Actif',    color: '#1a6b3c', bg: '#d4eddf' },
-                { id: 'c2', name: 'Karim M.',    initials: 'KM', lastSession: 'Il y a 1 semaine', sessions: 14, status: 'Actif',    color: '#1a6b3c', bg: '#d4eddf' },
-                { id: 'c3', name: 'Yasmine R.',  initials: 'YR', lastSession: 'Il y a 3 jours',   sessions: 5,  status: 'Actif',    color: '#1a6b3c', bg: '#d4eddf' },
-                { id: 'c4', name: 'Hassan T.',   initials: 'HT', lastSession: 'Hier',             sessions: 22, status: 'Actif',    color: '#1a6b3c', bg: '#d4eddf' },
-                { id: 'c5', name: 'Nadia B.',    initials: 'NB', lastSession: 'Il y a 5 jours',   sessions: 3,  status: 'Nouveau',  color: '#92400e', bg: '#fef3c7' },
-              ].map(client => (
+              {[].map(client => (
                 <div key={client.id} style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -720,6 +813,13 @@ export default function TherapistDashboard() {
                   </div>
                 </div>
               ))}
+              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📂</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 8 }}>Aucun dossier patient</h3>
+                <p style={{ color: 'var(--color-text-muted)', maxWidth: 340, margin: '0 auto' }}>
+                  Les dossiers de vos patients apparaîtront ici dès qu'ils auront réservé une séance avec vous.
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -731,9 +831,9 @@ export default function TherapistDashboard() {
             {/* Stat cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
               {[
-                { icon: <DollarSign size={22} />, label: 'Ce mois', value: '12 400', unit: 'MAD', trend: '+8%', trendUp: true,  iconBg: '#d1fae5', iconColor: '#065f46' },
-                { icon: <Calendar size={22} />,    label: 'Cette semaine', value: '3 200',  unit: 'MAD', trend: null,   trendUp: null,  iconBg: '#dbeafe', iconColor: '#1e40af' },
-                { icon: <Star size={22} />,        label: 'Séances ce mois', value: '31',  unit: '',    trend: '+4',   trendUp: true,  iconBg: '#fef3c7', iconColor: '#92400e' },
+                { icon: <DollarSign size={22} />, label: 'Ce mois', value: '0', unit: 'MAD', trend: null, trendUp: null, iconBg: '#d1fae5', iconColor: '#065f46' },
+                { icon: <Calendar size={22} />, label: 'Cette semaine', value: '0', unit: 'MAD', trend: null, trendUp: null, iconBg: '#dbeafe', iconColor: '#1e40af' },
+                { icon: <Star size={22} />, label: 'Séances ce mois', value: '0', unit: '', trend: null, trendUp: null, iconBg: '#fef3c7', iconColor: '#92400e' },
               ].map((stat, i) => (
                 <div key={i} style={{
                   background: 'var(--color-surface)',
@@ -777,57 +877,14 @@ export default function TherapistDashboard() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { client: 'Sara L.',    initials: 'SL', date: "Aujourd'hui", amount: 450, mode: 'online'  },
-                { client: 'Karim M.',   initials: 'KM', date: "Aujourd'hui", amount: 400, mode: 'cabinet' },
-                { client: 'Yasmine R.', initials: 'YR', date: 'Demain',      amount: 450, mode: 'online'  },
-                { client: 'Hassan T.',  initials: 'HT', date: 'Hier',        amount: 400, mode: 'cabinet' },
-                { client: 'Nadia B.',   initials: 'NB', date: 'Lundi',       amount: 450, mode: 'online'  },
-              ].map((p, i) => (
-                <div key={i} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 14,
-                  background: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 12,
-                  padding: '14px 20px',
-                }}>
-                  {/* Avatar */}
-                  <div style={{
-                    width: 44, height: 44, borderRadius: '50%',
-                    background: '#d4eddf', color: '#1a6b3c',
-                    fontWeight: 800, fontSize: 15,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    {p.initials}
-                  </div>
-
-                  {/* Client info */}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-text)', marginBottom: 2 }}>{p.client}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{p.date}</div>
-                  </div>
-
-                  {/* Mode badge */}
-                  <span style={{
-                    fontSize: 11, fontWeight: 700,
-                    padding: '3px 10px', borderRadius: 999,
-                    background: p.mode === 'online' ? '#dbeafe' : '#f3f4f6',
-                    color:      p.mode === 'online' ? '#1e40af' : '#374151',
-                    textTransform: 'uppercase', letterSpacing: '0.04em',
-                  }}>
-                    {p.mode === 'online' ? 'Vidéo' : 'Cabinet'}
-                  </span>
-
-                  {/* Amount */}
-                  <div style={{ textAlign: 'right', minWidth: 90 }}>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--color-primary)' }}>{p.amount}</span>
-                    <span style={{ fontSize: 12, color: 'var(--color-text-muted)', marginLeft: 4 }}>MAD</span>
-                  </div>
-                </div>
+              {[].map((p, i) => (
+                <div key={i}>dummy</div>
               ))}
+              <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>💳</div>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>Aucune transaction</h3>
+                <p style={{ color: 'var(--color-text-muted)', maxWidth: 320, margin: '0 auto' }}>L'historique de vos paiements apparaîtra ici dès que vous aurez des séances facturées.</p>
+              </div>
             </div>
           </div>
         )}

@@ -3,11 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Eye, EyeOff, ArrowRight, Lock, Mail, User, Phone, MapPin } from 'lucide-react';
 import * as authService from '../../services/auth';
+import { useAuth } from '../../context/AuthContext';
 import logoImg from '../../../image.png';
 import './AuthPages.css';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [form, setForm] = useState({ prenom: '', nom: '', email: '', tel: '', password: '', cin: '' });
   const [wantsCabinet, setWantsCabinet] = useState(false);
   const [showPwd, setShowPwd]   = useState(false);
@@ -35,10 +37,17 @@ export default function RegisterPage() {
       };
       
       const response = await authService.register(userData);
+      login(response.user, response.token);
       toast.success('Compte créé avec succès ! Bienvenue sur TherapiesMaroc.');
-      navigate('/connexion');
+      navigate(response.user.role === 'therapist' ? '/therapeute/dashboard' : '/patient/dashboard');
     } catch (err) {
-      toast.error('Erreur lors de la création du compte. Vérifiez vos informations.');
+      if (err.response && err.response.data && err.response.data.errors) {
+        // Display the first validation error dynamically
+        const firstErrorKey = Object.keys(err.response.data.errors)[0];
+        toast.error(err.response.data.errors[firstErrorKey][0]);
+      } else {
+        toast.error('Erreur lors de la création du compte. Vérifiez vos informations.');
+      }
     } finally {
       setLoading(false);
     }

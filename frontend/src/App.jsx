@@ -15,6 +15,8 @@ import ReservationsPage from './pages/Reservations/ReservationsPage';
 import VideoCallPage from './pages/VideoCall/VideoCallPage';
 import TherapistSettings from './pages/Dashboards/TherapistSettings';
 import PatientSettings from './pages/Dashboards/PatientSettings';
+import PaymentPage from './pages/Payment/PaymentPage';
+import PaymentSuccessPage from './pages/Payment/PaymentSuccessPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReservationProvider } from './context/ReservationContext';
 
@@ -44,7 +46,8 @@ function ConditionalNavbar() {
 function ConditionalFooter() {
   const location = useLocation();
   const hiddenRoutes = ['/messagerie', '/reservations', '/connexion', '/inscription'];
-  if (hiddenRoutes.includes(location.pathname)) return null;
+  if (hiddenRoutes.some(r => location.pathname.startsWith(r))) return null;
+  if (location.pathname.startsWith('/paiement')) return null;
   return <Footer />;
 }
 
@@ -92,6 +95,16 @@ export default function App() {
                 <Route path="/reservations" element={
                   <ProtectedRoute>
                     <ReservationsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/paiement/success" element={
+                  <ProtectedRoute role="patient">
+                    <PaymentSuccessPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/paiement/:requestId" element={
+                  <ProtectedRoute role="patient">
+                    <PaymentPage />
                   </ProtectedRoute>
                 } />
                 <Route path="/appel" element={

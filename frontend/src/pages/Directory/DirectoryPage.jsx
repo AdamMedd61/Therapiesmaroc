@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, X, MapPin, Monitor, Building2, Sparkles } from 'lucide-react';
-import { therapists, specialtyList, cityList } from '../../data/therapists';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, SlidersHorizontal, X, MapPin, Monitor, Building2, Sparkles, Loader2 } from 'lucide-react';
+import { specialtyList, cityList } from '../../data/therapists';
 import TherapistCard from '../../components/TherapistCard';
+import api from '../../services/api';
 import './DirectoryPage.css';
 
 const MODE_OPTIONS = [
@@ -20,6 +21,8 @@ const SORT_OPTIONS = [
 const LANG_OPTIONS = ['Arabe', 'Français', 'Anglais', 'Darija', 'Tamazight'];
 
 export default function DirectoryPage() {
+  const [therapists, setTherapists] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [city, setCity] = useState('Toutes les villes');
   const [mode, setMode] = useState('all');
@@ -50,6 +53,52 @@ export default function DirectoryPage() {
     setSelectedLangs([]);
     setMaxPrice(800);
   };
+
+  useEffect(() => {
+    api.get('/therapists').then(res => {
+      const data = res.data.map(t => {
+        const minPrice = t.services && t.services.length > 0 
+          ? Math.min(...t.services.map(s => Number(s.price))) 
+          : 400; // fallback
+
+        const modes = [...new Set((t.services || []).map(s => s.mode).flatMap(m => m === 'both' ? ['online', 'cabinet'] : [m]))];
+        if(modes.length === 0) modes.push('online'); // fallback
+        
+        let availStr = "Prochainement";
+        let availNext = "Plus tard";
+        if (t.next_slots && t.next_slots.length > 0) {
+          const nextSlot = new Date(t.next_slots[0].session_date);
+          availStr = `Prochain créneau : ${nextSlot.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à ${nextSlot.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+          
+          const today = new Date();
+          const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+          if (nextSlot.toDateString() === today.toDateString()) availNext = "Aujourd'hui";
+          else if (nextSlot.toDateString() === tomorrow.toDateString()) availNext = "Demain";
+          else availNext = "Cette semaine";
+        }
+
+        return {
+          id: t.id,
+          name: t.name || 'Dr.',
+          title: t.specialization || 'Thérapeute',
+          city: t.location || 'Casablanca',
+          specialties: (t.specialties && t.specialties.length > 0) ? t.specialties : [t.specialization || 'Général'],
+          languages: (t.languages && t.languages.length > 0) ? t.languages : ['Français', 'Arabe'],
+          modes: modes,
+          rating: 5.0,
+          reviewCount: 0,
+          price: minPrice,
+          availability: availStr,
+          availabilityNext: availNext
+        };
+      });
+      setTherapists(data);
+    }).catch(err => {
+      console.error(err);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     let list = therapists.filter(t => {
@@ -83,7 +132,7 @@ export default function DirectoryPage() {
     });
 
     return list;
-  }, [query, city, mode, sortBy, selectedSpecialties, selectedLangs, maxPrice]);
+  }, [therapists, query, city, mode, sortBy, selectedSpecialties, selectedLangs, maxPrice]);
 
   const pricePercent = (maxPrice / 800 * 100).toFixed(0);
 
@@ -318,7 +367,12 @@ export default function DirectoryPage() {
           )}
 
           {/* Grid */}
-          {filtered.length > 0 ? (
+          {loading ? (
+            <div className="dir-empty">
+              <Loader2 className="animate-spin" size={32} />
+              <p style={{ marginTop: 16 }}>Chargement des thérapeutes...</p>
+            </div>
+          ) : filtered.length > 0 ? (
             <div className="dir-grid">
               {filtered.map((t, i) => (
                 <div key={t.id} className={`animate-fade-in-up delay-${Math.min(i, 3)}`}>

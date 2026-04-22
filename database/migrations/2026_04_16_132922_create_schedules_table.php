@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('schedules', function (Blueprint $table) {
@@ -18,14 +15,12 @@ return new class extends Migration
             $table->string('category');
             $table->dateTime('session_date');
             $table->string('mode');
+            $table->json('service_ids')->nullable();
             $table->string('status')->default('available');
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('schedules');

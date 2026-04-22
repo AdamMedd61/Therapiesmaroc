@@ -22,11 +22,6 @@ class Client extends Model
         return $this->hasMany(BookingRequest::class);
     }
 
-    public function schedules()
-    {
-        return $this->hasMany(Schedule::class);
-    }
-
     public function reviews()
     {
         return $this->hasMany(Review::class);

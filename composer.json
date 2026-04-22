@@ -12,9 +12,10 @@
         "php": "^8.3",
         "inertiajs/inertia-laravel": "^3.0",
         "laravel/framework": "^13.0",
-        "laravel/sanctum": "^4.0",
+        "laravel/sanctum": "*",
         "laravel/tinker": "^3.0",
-        "laravel/wayfinder": "^0.1.14"
+        "laravel/wayfinder": "^0.1.14",
+        "stripe/stripe-php": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",

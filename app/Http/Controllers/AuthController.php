@@ -35,7 +35,10 @@ class AuthController extends Controller
         if ($request->role === 'patient') {
             Client::create(['user_id' => $user->id]);
         } else {
-            Therapist::create(['user_id' => $user->id]);
+            Therapist::create([
+                'user_id' => $user->id,
+                'specialization' => 'Général',
+            ]);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -77,6 +80,34 @@ class AuthController extends Controller
 
     public function me(Request $request) {
         $user = $request->user();
+        return response()->json($user->load($user->role === 'patient' ? 'client' : 'therapist'));
+    }
+
+    public function updateProfile(Request $request) {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'email' => 'sometimes|email|unique:users,email,'.$user->id,
+            'tel' => 'sometimes|nullable|string|max:20',
+            'city' => 'sometimes|nullable|string|max:100',
+            'address' => 'sometimes|nullable|string|max:255',
+            'avatar' => 'sometimes|nullable|image|max:5120', // 5MB max
+        ]);
+
+        if ($request->has('city')) {
+            $data['location'] = $request->city;
+            unset($data['city']);
+        }
+
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $data['avatar_url'] = '/storage/' . $path;
+            unset($data['avatar']);
+        }
+
+        $user->update($data);
+
         return response()->json($user->load($user->role === 'patient' ? 'client' : 'therapist'));
     }
 }

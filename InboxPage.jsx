@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Send, Paperclip, Search, MoreVertical, Phone, Video,
@@ -7,32 +7,84 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../services/api';
+import { useReservations, THERAPIST_DEMO_ID, PATIENT_DEMO_ID } from '../../context/ReservationContext';
 import './InboxPage.css';
 
-// ── Static mock chat data (chat is UI-only for now) ──────────────────────
-const therapistConversations = [
-  { id: 'p1', name: 'Adam Medd', lastMessage: 'Bonjour Docteur, est-ce que vous avez vu ma demande ?', timestamp: "Auj, 09:15", unread: 1, online: true },
-  { id: 'p2', name: 'Karim M.', lastMessage: 'Merci pour la confirmation de notre séance.', timestamp: 'Hier', unread: 0, online: false },
+
+// ──── Static chat mock data ──────────────────────────────────────────────────────────────────────────────────────────────────
+const conversations = [
+  {
+    id: '1',
+    name: 'Dr. Salma Benkirane',
+    therapistId: '1',
+    lastMessage: 'Je vous envoie les notes de notre dernière séance...',
+    timestamp: 'Auj, 10:30',
+    unread: 2,
+    online: true,
+  },
+  {
+    id: '2',
+    name: 'Dr. Youssef Alami',
+    therapistId: '2',
+    lastMessage: "N'oubliez pas vos exercices respiratoires ce soir.",
+    timestamp: 'Hier',
+    unread: 0,
+    online: false,
+  },
+  {
+    id: '3',
+    name: 'Support TherapiesMaroc',
+    therapistId: null,
+    lastMessage: 'Votre facture a été générée avec succès.',
+    timestamp: 'Lun.',
+    unread: 0,
+    online: true,
+  },
 ];
 
 const patientConversations = [
-  { id: 't1', name: 'Dr. Salma Benkirane', lastMessage: 'Je vous envoie les notes de notre dernière séance...', timestamp: 'Auj, 10:30', unread: 2, online: true },
-  { id: 't2', name: 'Dr. Youssef Alami', lastMessage: "N'oubliez pas vos exercices respiratoires ce soir.", timestamp: 'Hier', unread: 0, online: false },
+  {
+    id: 'p1',
+    name: 'Sara L.',
+    clientId: 'client-1',
+    lastMessage: 'Bonjour Docteur, est-ce que vous avez vu ma demande ?',
+    timestamp: 'Auj, 09:15',
+    unread: 1,
+    online: true,
+  },
+  {
+    id: 'p2',
+    name: 'Karim M.',
+    clientId: 'client-2',
+    lastMessage: 'Merci pour la confirmation de notre séance.',
+    timestamp: 'Hier',
+    unread: 0,
+    online: false,
+  },
 ];
 
 const mockMessages = [
   { id: '1', sender: 'other', content: 'Bonjour ! Comment vous sentez-vous depuis notre séance de mardi ?', time: '10:00' },
   { id: '2', sender: 'me', content: "Bonjour Docteur. Je me sens un peu mieux, j'ai commencé à appliquer les méthodes de respiration.", time: '10:15' },
-  { id: '3', sender: 'other', content: "Excellent. C'est un très bon début. Je vous envoie un document PDF avec quelques variations à essayer.", time: '10:30' },
+  { id: '3', sender: 'other', content: "Excellent. C'est un très bon début. Je vous envoie un document PDF avec quelques variations à essayer pour ce week-end.", time: '10:30' },
 ];
 
-// ── Status pill ──────────────────────────────────────────────────────────
+// ──── REASON LABELS ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+const REASON_LABELS = {
+  anxiete: 'Anxiété & stress',
+  depression: 'Dépression',
+  couple: 'Relation de couple',
+  trauma: 'Trauma & deuil',
+  travail: 'Stress professionnel / Burnout',
+  autre: 'Autre',
+};
+
+// ──── Status pill component ──────────────────────────────────────────────────────────────────────────────────────────────────
 function StatusPill({ status }) {
   const config = {
-    pending:  { label: 'En attente', cls: 'status-pending',  Icon: Clock },
-    accepted: { label: 'Acceptée',   cls: 'status-accepted', Icon: CheckCircle2 },
-    refused:  { label: 'Refusée',    cls: 'status-rejected', Icon: XCircle },
+    pending: { label: 'En attente', cls: 'status-pending', Icon: Clock },
+    accepted: { label: 'Acceptée', cls: 'status-accepted', Icon: CheckCircle2 },
+    rejected: { label: 'Refusée', cls: 'status-rejected', Icon: XCircle },
   };
   const { label, cls, Icon } = config[status] || config.pending;
   return (
@@ -43,21 +95,18 @@ function StatusPill({ status }) {
   );
 }
 
-// ── Patient: my booking request card ────────────────────────────────────
-function ClientReservationCard({ req, onCancel }) {
-  const therapistName = req.therapist?.user?.name || 'Thérapeute';
-  const sessionDate   = req.schedule?.session_date ? new Date(req.schedule.session_date) : null;
-
+// ──── Client: Reservation card ────────────────────────────────────────────────────────────────────────────────────────────
+function ClientReservationCard({ req }) {
   return (
     <div className={`req-card req-card-${req.status}`}>
       <div className="req-card-header">
         <div className="req-card-therapist">
           <div className="avatar avatar-sm req-avatar">
-            {therapistName.split(' ').slice(-1)[0]?.substring(0, 2)}
+            {req.therapistName.split(' ').slice(-1)[0]?.substring(0, 2)}
           </div>
           <div>
-            <h4>{therapistName}</h4>
-            <p className="text-xs text-muted">{req.schedule?.category || 'Consultation'}</p>
+            <h4>{req.therapistName}</h4>
+            <p className="text-xs text-muted">{req.service}</p>
           </div>
         </div>
         <StatusPill status={req.status} />
@@ -65,36 +114,27 @@ function ClientReservationCard({ req, onCancel }) {
 
       <div className="req-card-details">
         <span className="req-detail-chip">
-          {req.schedule?.mode === 'online' ? <Video size={12} /> : <User size={12} />}
-          {req.schedule?.mode === 'online' ? 'En ligne' : 'En cabinet'}
+          {req.mode === 'online' ? <Video size={12} /> : <User size={12} />}
+          {req.mode === 'online' ? 'En ligne' : 'En cabinet'}
         </span>
-        {sessionDate && (
-          <>
-            <span className="req-detail-chip">
-              <CalendarCheck size={12} />
-              {sessionDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-            </span>
-            <span className="req-detail-chip">
-              <Clock size={12} />
-              {sessionDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </>
-        )}
+        <span className="req-detail-chip">
+          <CalendarCheck size={12} />
+          {req.date?.replace('-', ' ')} Mars
+        </span>
+        <span className="req-detail-chip">
+          <Clock size={12} />
+          {req.time}
+        </span>
       </div>
 
-      {req.commentary && (
-        <p className="req-notes">«&nbsp;{req.commentary}&nbsp;»</p>
+      {req.notes && (
+        <p className="req-notes">«&nbsp;{req.notes}&nbsp;»</p>
       )}
 
       {req.status === 'pending' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div className="req-banner req-banner-pending">
-            <AlertCircle size={14} />
-            <span>Votre demande est en cours d'examen par le thérapeute.</span>
-          </div>
-          <button className="btn btn-outline req-reject-btn" onClick={() => onCancel(req.id)}>
-            <XCircle size={15} /> Annuler la demande
-          </button>
+        <div className="req-banner req-banner-pending">
+          <AlertCircle size={14} />
+          <span>Votre demande est en cours d'examen par le thérapeute.</span>
         </div>
       )}
       {req.status === 'accepted' && (
@@ -103,7 +143,7 @@ function ClientReservationCard({ req, onCancel }) {
           <span>Séance confirmée ! Vous recevrez un rappel avant la séance.</span>
         </div>
       )}
-      {req.status === 'refused' && (
+      {req.status === 'rejected' && (
         <div className="req-banner req-banner-rejected">
           <XCircle size={14} />
           <span>Le thérapeute n'est pas disponible à ce créneau. Essayez un autre horaire.</span>
@@ -113,21 +153,18 @@ function ClientReservationCard({ req, onCancel }) {
   );
 }
 
-// ── Therapist: incoming request card ────────────────────────────────────
-function TherapistRequestCard({ req, onAccept, onRefuse }) {
-  const clientName = req.client?.user?.name || 'Patient';
-  const sessionDate = req.schedule?.session_date ? new Date(req.schedule.session_date) : null;
-
+// ──── Therapist: Reservation request card ────────────────────────────────────────────────────────────────────
+function TherapistRequestCard({ req, onAccept, onReject }) {
   return (
     <div className={`req-card req-card-${req.status}`}>
       <div className="req-card-header">
         <div className="req-card-therapist">
           <div className="avatar avatar-sm req-avatar-client">
-            {clientName.substring(0, 2)}
+            {req.clientName?.substring(0, 2)}
           </div>
           <div>
-            <h4>{clientName}</h4>
-            <p className="text-xs text-muted">{req.schedule?.category || 'Consultation'}</p>
+            <h4>{req.clientName}</h4>
+            <p className="text-xs text-muted">{req.service}</p>
           </div>
         </div>
         <StatusPill status={req.status} />
@@ -135,35 +172,41 @@ function TherapistRequestCard({ req, onAccept, onRefuse }) {
 
       <div className="req-card-details">
         <span className="req-detail-chip">
-          {req.schedule?.mode === 'online' ? <Video size={12} /> : <User size={12} />}
-          {req.schedule?.mode === 'online' ? 'En ligne' : 'En cabinet'}
+          {req.mode === 'online' ? <Video size={12} /> : <User size={12} />}
+          {req.mode === 'online' ? 'En ligne' : 'En cabinet'}
         </span>
-        {sessionDate && (
-          <>
-            <span className="req-detail-chip">
-              <CalendarCheck size={12} />
-              {sessionDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-            </span>
-            <span className="req-detail-chip">
-              <Clock size={12} />
-              {sessionDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </>
-        )}
-        {req.commentary && (
+        <span className="req-detail-chip">
+          <CalendarCheck size={12} />
+          {req.date?.replace('-', ' ')} Mars
+        </span>
+        <span className="req-detail-chip">
+          <Clock size={12} />
+          {req.time}
+        </span>
+        {req.reason && (
           <span className="req-detail-chip">
             <MessageSquare size={12} />
-            {req.commentary.substring(0, 30)}{req.commentary.length > 30 ? '…' : ''}
+            {REASON_LABELS[req.reason] || req.reason}
           </span>
         )}
       </div>
 
+      {req.notes && (
+        <p className="req-notes">«&nbsp;{req.notes}&nbsp;»</p>
+      )}
+
       {req.status === 'pending' && (
         <div className="req-actions-row">
-          <button className="btn btn-outline req-reject-btn" onClick={() => onRefuse(req.id)}>
+          <button
+            className="btn btn-outline req-reject-btn"
+            onClick={() => onReject(req.id)}
+          >
             <XCircle size={15} /> Refuser
           </button>
-          <button className="btn btn-primary req-accept-btn" onClick={() => onAccept(req.id)}>
+          <button
+            className="btn btn-primary req-accept-btn"
+            onClick={() => onAccept(req.id)}
+          >
             <CheckCircle2 size={15} /> Accepter
           </button>
         </div>
@@ -174,7 +217,7 @@ function TherapistRequestCard({ req, onAccept, onRefuse }) {
           <span>Vous avez confirmé cette séance.</span>
         </div>
       )}
-      {req.status === 'refused' && (
+      {req.status === 'rejected' && (
         <div className="req-banner req-banner-rejected">
           <XCircle size={14} />
           <span>Vous avez refusé cette demande.</span>
@@ -184,78 +227,32 @@ function TherapistRequestCard({ req, onAccept, onRefuse }) {
   );
 }
 
-// ── Main InboxPage ───────────────────────────────────────────────────────
+// ──── Main InboxPage ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export default function InboxPage() {
   const { user } = useAuth();
+  const { requests, updateStatus, getRequestsForTherapist, getRequestsForClient } = useReservations();
   const location = useLocation();
+
   const isTherapist = user?.role === 'therapist';
 
+  // Hardcoded to chat since this is now standalone Messagerie page
+  const mainTab = 'chat';
+
   // Chat state
-  const convList = isTherapist ? therapistConversations : patientConversations;
+  const convList = isTherapist ? patientConversations : conversations;
   const [activeConv, setActiveConv] = useState(convList[0]);
   const [messages, setMessages] = useState(mockMessages);
   const [input, setInput] = useState('');
 
-  // Auto-open Demandes tab if coming from navbar link
-  const initialTab = new URLSearchParams(location.search).get('tab') === 'demandes' ? 'reservations' : 'chat';
-  const [mainTab, setMainTab] = useState(initialTab);
+  // Reservation requests  use user.id if set, fall back to stable demo IDs
+  const myTherapistId = user?.id || THERAPIST_DEMO_ID;
+  const myClientId    = user?.id || PATIENT_DEMO_ID;
 
-  // Reservations state
-  const [requests, setRequests] = useState([]);
-  const [loadingRequests, setLoadingRequests] = useState(false);
+  const myRequests = isTherapist
+    ? getRequestsForTherapist(myTherapistId)
+    : getRequestsForClient(myClientId);
 
-  const messagesEndRef = useRef(null);
-
-  useEffect(() => {
-    if (mainTab === 'reservations') loadRequests();
-  }, [mainTab]); // eslint-disable-line
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const loadRequests = async () => {
-    try {
-      setLoadingRequests(true);
-      const res = await api.get('/requests');
-      setRequests(res.data);
-    } catch {
-      toast.error('Erreur chargement des demandes.');
-    } finally {
-      setLoadingRequests(false);
-    }
-  };
-
-  const handleAccept = async (id) => {
-    try {
-      await api.put(`/requests/${id}`, { status: 'accepted' });
-      toast.success('Séance confirmée !');
-      loadRequests();
-    } catch {
-      toast.error('Erreur lors de la confirmation.');
-    }
-  };
-
-  const handleRefuse = async (id) => {
-    try {
-      await api.put(`/requests/${id}`, { status: 'refused' });
-      toast.error('Demande refusée. Le patient a été notifié.');
-      loadRequests();
-    } catch {
-      toast.error('Erreur lors du refus.');
-    }
-  };
-
-  const handleCancel = async (id) => {
-    if (!window.confirm('Confirmer l\'annulation ?')) return;
-    try {
-      await api.delete(`/requests/${id}`);
-      toast.success('Demande annulée.');
-      loadRequests();
-    } catch {
-      toast.error('Erreur lors de l\'annulation.');
-    }
-  };
+  const pendingCount = myRequests.filter(r => r.status === 'pending').length;
 
   const handleSend = (e) => {
     e.preventDefault();
@@ -269,36 +266,25 @@ export default function InboxPage() {
     setInput('');
   };
 
-  const pendingCount = requests.filter(r => r.status === 'pending').length;
+  const handleAccept = (id) => {
+    updateStatus(id, 'accepted');
+    toast.success('S& Séance confirmée ! Le patient a été notifié.');
+  };
+
+  const handleReject = (id) => {
+    updateStatus(id, 'rejected');
+    toast.error('R Demande refusée. Le patient a été notifié.');
+  };
 
   return (
     <div className="inbox-page">
       <div className="container py-6 h-100">
         <div className="inbox-container card p-0">
 
-          {/* ── Sidebar ── */}
+          {/* ── SECTION ── */}
           <div className="inbox-sidebar">
             <div className="inbox-sidebar-header">
               <h2 style={{ marginBottom: 12 }}>Messagerie</h2>
-
-              {/* Tab switcher */}
-              <div className="inbox-main-tabs">
-                <button
-                  className={`inbox-tab-btn ${mainTab === 'chat' ? 'active' : ''}`}
-                  onClick={() => setMainTab('chat')}
-                >
-                  <MessageSquare size={14} /> Chat
-                </button>
-                <button
-                  className={`inbox-tab-btn ${mainTab === 'reservations' ? 'active' : ''}`}
-                  onClick={() => setMainTab('reservations')}
-                >
-                  <CalendarCheck size={14} /> Demandes
-                  {pendingCount > 0 && (
-                    <span className="inbox-notif-dot">{pendingCount}</span>
-                  )}
-                </button>
-              </div>
 
               {mainTab === 'chat' && (
                 <div className="inbox-search">
@@ -338,35 +324,29 @@ export default function InboxPage() {
               </div>
             )}
 
-            {/* Reservations mini-list */}
+            {/* Reservation list (sidebar mini-preview) */}
             {mainTab === 'reservations' && (
-              <div className="inbox-list" style={{ marginTop: 8 }}>
-                {loadingRequests ? (
-                  <div className="inbox-empty-sidebar">Chargement...</div>
-                ) : requests.length === 0 ? (
+              <div className="inbox-list">
+                {myRequests.length === 0 ? (
                   <div className="inbox-empty-sidebar">
                     <CalendarCheck size={32} className="text-muted" />
                     <p>Aucune demande</p>
                   </div>
                 ) : (
-                  requests.map(req => (
+                  myRequests.map(req => (
                     <div key={req.id} className="inbox-item req-sidebar-item">
-                      <div className="req-avatar-sm">
+                      <div className="avatar avatar-sm req-avatar-sm">
                         {isTherapist
-                          ? (req.client?.user?.name || 'Pa').substring(0, 2)
-                          : (req.therapist?.user?.name || 'Dr').substring(0, 2)}
+                          ? req.clientName?.substring(0, 2)
+                          : req.therapistName?.split(' ').slice(-1)[0]?.substring(0, 2)}
                       </div>
                       <div className="inbox-item-content">
                         <div className="inbox-item-header">
-                          <h4>{isTherapist ? (req.client?.user?.name || 'Patient') : (req.therapist?.user?.name || 'Thérapeute')}</h4>
+                          <h4>{isTherapist ? req.clientName : req.therapistName}</h4>
                           <span className={`req-dot req-dot-${req.status}`}></span>
                         </div>
                         <div className="inbox-item-footer">
-                          <p className="inbox-preview">
-                            {req.schedule?.session_date
-                              ? new Date(req.schedule.session_date).toLocaleDateString('fr-FR')
-                              : 'Date inconnue'}
-                          </p>
+                          <p className="inbox-preview">{req.service} · {req.time}</p>
                         </div>
                       </div>
                     </div>
@@ -376,10 +356,10 @@ export default function InboxPage() {
             )}
           </div>
 
-          {/* ── Main panel ── */}
+          {/* ── SECTION ── */}
           <div className="inbox-chat">
 
-            {/* Chat view */}
+            {/* ── SECTION ── */}
             {mainTab === 'chat' && activeConv && (
               <>
                 <div className="chat-header">
@@ -414,7 +394,6 @@ export default function InboxPage() {
                       </div>
                     </div>
                   ))}
-                  <div ref={messagesEndRef} />
                 </div>
 
                 <form className="chat-input-area" onSubmit={handleSend}>
@@ -423,7 +402,7 @@ export default function InboxPage() {
                   </button>
                   <input
                     type="text"
-                    placeholder="Écrivez votre message..."
+                    placeholder="0crivez votre message..."
                     className="chat-input"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
@@ -435,12 +414,14 @@ export default function InboxPage() {
               </>
             )}
 
-            {/* Reservations panel */}
+            {/* ── SECTION ── */}
             {mainTab === 'reservations' && (
               <div className="reservations-panel">
                 <div className="reservations-header">
                   <div>
-                    <h3>{isTherapist ? 'Demandes de réservation' : 'Mes réservations'}</h3>
+                    <h3>
+                      {isTherapist ? 'Demandes de réservation' : 'Mes réservations'}
+                    </h3>
                     <p className="text-sm text-muted">
                       {isTherapist
                         ? 'Acceptez ou refusez les demandes de vos patients.'
@@ -456,29 +437,27 @@ export default function InboxPage() {
                 </div>
 
                 <div className="reservations-list">
-                  {loadingRequests ? (
-                    <div className="reservations-empty">Chargement...</div>
-                  ) : requests.length === 0 ? (
+                  {myRequests.length === 0 ? (
                     <div className="reservations-empty">
                       <CalendarCheck size={48} className="text-muted" />
                       <h4>Aucune demande</h4>
                       <p className="text-muted">
                         {isTherapist
                           ? 'Vos patients pourront envoyer des demandes de séance ici.'
-                          : "Rendez-vous sur le profil d'un thérapeute pour réserver une séance."}
+                          : 'Rendez-vous sur le profil d\'un thérapeute pour réserver une séance.'}
                       </p>
                     </div>
                   ) : (
-                    requests.map(req =>
+                    myRequests.map(req =>
                       isTherapist ? (
                         <TherapistRequestCard
                           key={req.id}
                           req={req}
                           onAccept={handleAccept}
-                          onRefuse={handleRefuse}
+                          onReject={handleReject}
                         />
                       ) : (
-                        <ClientReservationCard key={req.id} req={req} onCancel={handleCancel} />
+                        <ClientReservationCard key={req.id} req={req} />
                       )
                     )
                   )}
@@ -486,7 +465,6 @@ export default function InboxPage() {
               </div>
             )}
           </div>
-
         </div>
       </div>
     </div>

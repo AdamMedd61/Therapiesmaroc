@@ -1,27 +1,18 @@
-import { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Calendar, Video, Building2, Check, AlertCircle } from 'lucide-react';
-import { therapists } from '../../data/therapists';
-import { useReservations } from '../../context/ReservationContext';
+import { ChevronLeft, ChevronRight, Video, Building2, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
 import './BookingPage.css';
 
-const SERVICES = [
-  { id: 's1', name: 'Consultation individuelle', desc: 'Séance individuelle de psychothérapie', duration: 55, price: null, modes: ['online', 'cabinet'] },
-  { id: 's2', name: 'Thérapie de couple', desc: 'Séance pour deux partenaires', duration: 60, price: null, modes: ['online', 'cabinet'] },
-  { id: 's3', name: 'Consultation initiale', desc: 'Première rencontre et évaluation (tarif réduit)', duration: 30, price: null, modes: ['online'] },
-];
-
-const TIME_SLOTS = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
-
 const REASONS = [
-  { value: 'anxiete', label: 'Anxiété & stress' },
+  { value: 'anxiete',    label: 'Anxiété & stress' },
   { value: 'depression', label: 'Dépression' },
-  { value: 'couple', label: 'Relation de couple' },
-  { value: 'trauma', label: 'Trauma & deuil' },
-  { value: 'travail', label: 'Stress professionnel / Burnout' },
-  { value: 'autre', label: 'Autre' },
+  { value: 'couple',     label: 'Relation de couple' },
+  { value: 'trauma',     label: 'Trauma & deuil' },
+  { value: 'travail',    label: 'Stress professionnel / Burnout' },
+  { value: 'autre',      label: 'Autre' },
 ];
 
 const STEPS = [
@@ -34,77 +25,99 @@ const STEPS = [
 export default function BookingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const therapist = therapists.find(t => t.id === id) || therapists[0];
-  const { addRequest } = useReservations();
   const { user } = useAuth();
+
+  const [therapist, setTherapist] = useState(null);
+  const [loadingTherapist, setLoadingTherapist] = useState(true);
 
   const [step, setStep] = useState(1);
   const [selectedService, setSelectedService] = useState('');
   const [selectedMode, setSelectedMode] = useState('');
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTime, setSelectedTime] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');   // 'YYYY-MM-DD'
+  const [selectedSlot, setSelectedSlot] = useState(null); // full slot object {id, session_date, mode}
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Build human-readable week label for the select
-  const getWeekLabel = (offset) => {
-    if (offset === 0) return 'Cette semaine';
-    if (offset === 1) return 'Semaine prochaine';
-    const d = new Date();
-    const day = d.getDay() || 7;
-    d.setDate(d.getDate() - day + 1 + offset * 7);
-    const start = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-    d.setDate(d.getDate() + 6);
-    const end = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-    return `${start} – ${end}`;
+  useEffect(() => {
+    const fetchTherapist = async () => {
+      try {
+        const res = await api.get(`/therapists/${id}`);
+        setTherapist(res.data);
+      } catch {
+        toast.error('Erreur chargement thérapeute');
+        navigate(-1);
+      } finally {
+        setLoadingTherapist(false);
+      }
+    };
+    fetchTherapist();
+  }, [id, navigate]);
+
+  // ── Slot helpers ──────────────────────────────────────────────────────
+  // Group available_slots by calendar date, optionally filtered by selected mode
+  const slotsByDate = {};
+  (therapist?.available_slots || []).forEach(slot => {
+    if (selectedMode && slot.mode !== selectedMode && slot.mode !== 'both') return;
+    const rawDate = slot.session_date || '';
+    const dateKey = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate.split(' ')[0];
+    if (!slotsByDate[dateKey]) slotsByDate[dateKey] = [];
+    slotsByDate[dateKey].push(slot);
+  });
+
+  const availableDates = Object.keys(slotsByDate).sort();
+
+  const timeSlotsForDate = selectedDate
+    ? (slotsByDate[selectedDate] || []).sort((a, b) => a.session_date.localeCompare(b.session_date))
+    : [];
+
+  const formatDayLabel = (dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    if (d.getTime() === today.getTime()) return "Aujourd'hui";
+    if (d.getTime() === tomorrow.getTime()) return 'Demain';
+    return d.toLocaleDateString('fr-FR', { weekday: 'short' });
   };
 
-  // Get actual date label for a day within the chosen week
-  const getDayDateLabel = (dayName) => {
-    const dayMap = { 'Lun': 1, 'Mar': 2, 'Mer': 3, 'Jeu': 4, 'Ven': 5, 'Sam': 6, 'Dim': 7 };
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    const todayDay = d.getDay() || 7;
-    d.setDate(d.getDate() - todayDay + (dayMap[dayName] || 1) + weekOffset * 7);
+  const formatDayDate = (dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00');
     return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   };
 
-  const initials = therapist.name.split(' ').slice(-2).map(n => n[0]).join('');
+  const formatTime = (sessionDate) => {
+    const d = new Date(sessionDate);
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  };
 
-  // Use therapist-specific services, merge price
-  const services = therapist.services.map((s, i) => ({
-    ...SERVICES[i] || {},
-    ...s,
-    price: s.price,
-  }));
-
-  const service = therapist.services.find(s => s.id === selectedService);
-
+  // ── Navigation ────────────────────────────────────────────────────────
   const canProceed =
     step === 1 ? !!selectedService :
     step === 2 ? !!selectedMode :
-    step === 3 ? !!selectedDate && !!selectedTime :
+    step === 3 ? !!selectedDate && !!selectedSlot :
     true;
 
-  const handleNext = () => {
-    if (step < 4) setStep(step + 1);
-    else {
-      // Submit reservation request  therapist must accept/reject
-      addRequest({
-        clientName: user?.name || 'Patient',
-        clientId: user?.id || `client-${Date.now()}`,
-        therapistId: therapist.id,
-        therapistName: therapist.name,
-        service: service?.name || selectedService,
-        mode: selectedMode,
-        date: selectedDate,
-        time: selectedTime,
-        reason,
-        notes,
-      });
-      toast.success('S& Demande envoyée ! Le thérapeute va confirmer votre réservation.');
-      navigate('/messagerie');
+  const handleNext = async () => {
+    if (step < 4) {
+      setStep(step + 1);
+    } else {
+      if (!selectedSlot) { toast.error('Veuillez choisir un créneau.'); return; }
+      setIsSubmitting(true);
+      try {
+        await api.post('/requests', {
+          therapist_id: Number(id),
+          service_id: selectedService,
+          session_date: selectedSlot.session_date,
+          mode: selectedMode,
+          commentary: notes ? `${reason ? `[${reason}] ` : ''}${notes}` : reason,
+        });
+        toast.success('Demande envoyée ! Le thérapeute va confirmer votre réservation.');
+        navigate('/patient/dashboard');
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Erreur lors de la réservation.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -113,16 +126,22 @@ export default function BookingPage() {
     else navigate(-1);
   };
 
+  if (loadingTherapist) return <div style={{ padding: '100px', textAlign: 'center' }}>Chargement...</div>;
+  if (!therapist) return null;
+
+  const initials = therapist.name.split(' ').slice(-2).map(n => n[0]).join('');
+  const services = therapist.services || [];
+  const service = services.find(s => s.id === selectedService);
+
   return (
     <div className="booking-page">
       <div className="container booking-inner">
 
         {/* Left - form */}
         <div className="booking-form-col">
-          {/* Back */}
           <button className="btn btn-ghost btn-sm booking-back" onClick={handleBack}>
             <ChevronLeft size={16} />
-            {step === 1 ? 'Retour au profil' : '0tape précédente'}
+            {step === 1 ? 'Retour au profil' : 'Étape précédente'}
           </button>
 
           {/* Progress */}
@@ -140,13 +159,15 @@ export default function BookingPage() {
 
           <div className="booking-card card">
 
-            {/* ── SECTION ── */}
+            {/* ── Step 1: Service ── */}
             {step === 1 && (
               <div className="animate-fade-in">
                 <h2 className="booking-step-title">Choisissez votre service</h2>
                 <p className="booking-step-sub">Sélectionnez le type de consultation qui correspond à votre besoin.</p>
                 <div className="booking-service-list">
-                  {therapist.services.map(svc => (
+                  {services.length === 0 ? (
+                    <p>Aucun service défini par ce thérapeute.</p>
+                  ) : services.map(svc => (
                     <label
                       key={svc.id}
                       className={`booking-service-option ${selectedService === svc.id ? 'selected' : ''}`}
@@ -161,12 +182,12 @@ export default function BookingPage() {
                       />
                       <div className="booking-service-info">
                         <h4 className="booking-service-name">{svc.name}</h4>
-                        <p className="booking-service-dur">{svc.duration} minutes</p>
+                        <p className="booking-service-dur">{svc.duration}</p>
                         <div className="booking-service-mods">
-                          {svc.modes.includes('online') && (
+                          {['online', 'both'].includes(svc.mode) && (
                             <span className="badge badge-primary"><Video size={10} /> En ligne</span>
                           )}
-                          {svc.modes.includes('cabinet') && (
+                          {['cabinet', 'both'].includes(svc.mode) && (
                             <span className="badge badge-neutral"><Building2 size={10} /> En cabinet</span>
                           )}
                         </div>
@@ -178,52 +199,35 @@ export default function BookingPage() {
               </div>
             )}
 
-            {/* ── SECTION ── */}
+            {/* ── Step 2: Mode ── */}
             {step === 2 && service && (
               <div className="animate-fade-in">
                 <h2 className="booking-step-title">Mode de consultation</h2>
                 <p className="booking-step-sub">Comment souhaitez-vous rencontrer {therapist.name} ?</p>
                 <div className="booking-mode-list">
-                  {service.modes.includes('online') && (
+                  {['online', 'both'].includes(service.mode) && (
                     <label className={`booking-mode-option ${selectedMode === 'online' ? 'selected' : ''}`}>
-                      <input
-                        type="radio"
-                        className="radio-input"
-                        name="mode"
-                        value="online"
-                        checked={selectedMode === 'online'}
-                        onChange={() => setSelectedMode('online')}
-                      />
-                      <div className="booking-mode-icon booking-mode-online">
-                        <Video size={24} />
-                      </div>
+                      <input type="radio" className="radio-input" name="mode" value="online"
+                        checked={selectedMode === 'online'} onChange={() => { setSelectedMode('online'); setSelectedDate(''); setSelectedSlot(null); }} />
+                      <div className="booking-mode-icon booking-mode-online"><Video size={24} /></div>
                       <div>
                         <h4>En ligne</h4>
                         <p className="text-sm text-muted">Vidéo consultation depuis chez vous</p>
                       </div>
                     </label>
                   )}
-                  {service.modes.includes('cabinet') && (
+                  {['cabinet', 'both'].includes(service.mode) && (
                     <label className={`booking-mode-option ${selectedMode === 'cabinet' ? 'selected' : ''}`}>
-                      <input
-                        type="radio"
-                        className="radio-input"
-                        name="mode"
-                        value="cabinet"
-                        checked={selectedMode === 'cabinet'}
-                        onChange={() => setSelectedMode('cabinet')}
-                      />
-                      <div className="booking-mode-icon booking-mode-cabinet">
-                        <Building2 size={24} />
-                      </div>
+                      <input type="radio" className="radio-input" name="mode" value="cabinet"
+                        checked={selectedMode === 'cabinet'} onChange={() => { setSelectedMode('cabinet'); setSelectedDate(''); setSelectedSlot(null); }} />
+                      <div className="booking-mode-icon booking-mode-cabinet"><Building2 size={24} /></div>
                       <div>
                         <h4>En cabinet</h4>
-                        <p className="text-sm text-muted">{therapist.address}</p>
+                        <p className="text-sm text-muted">{therapist.location}</p>
                       </div>
                     </label>
                   )}
                 </div>
-
                 {selectedMode === 'cabinet' && (
                   <div className="booking-note">
                     <AlertCircle size={14} />
@@ -233,81 +237,61 @@ export default function BookingPage() {
               </div>
             )}
 
-            {/* ── SECTION ── */}
+            {/* ── Step 3: Date & Time (real slots) ── */}
             {step === 3 && (
               <div className="animate-fade-in">
                 <h2 className="booking-step-title">Date & heure</h2>
                 <p className="booking-step-sub">Choisissez le créneau qui vous convient le mieux.</p>
 
-                <div className="booking-dates">
-                  {/* Week selector */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                    <label className="label" style={{ margin: 0, whiteSpace: 'nowrap' }}>Semaine :</label>
-                    <select
-                      className="select"
-                      value={weekOffset}
-                      onChange={e => {
-                        setWeekOffset(Number(e.target.value));
-                        setSelectedDate('');
-                        setSelectedTime('');
-                      }}
-                      style={{ flex: 1 }}
-                    >
-                      {[0, 1, 2, 3].map(offset => (
-                        <option key={offset} value={offset}>{getWeekLabel(offset)}</option>
+                {availableDates.length === 0 ? (
+                  <div className="booking-note" style={{ marginTop: 'var(--space-5)' }}>
+                    <AlertCircle size={14} />
+                    <span>Aucun créneau disponible pour ce mode. Le thérapeute n'a pas encore publié de disponibilités.</span>
+                  </div>
+                ) : (
+                  <>
+                    <label className="label" style={{ marginTop: 'var(--space-4)' }}>Jour de consultation</label>
+                    <div className="booking-days-grid">
+                      {availableDates.map(dateKey => (
+                        <button
+                          key={dateKey}
+                          className={`booking-day-btn ${selectedDate === dateKey ? 'selected' : ''}`}
+                          onClick={() => { setSelectedDate(dateKey); setSelectedSlot(null); }}
+                        >
+                          <span className="booking-day-name">{formatDayLabel(dateKey)}</span>
+                          <span className="booking-day-date">{formatDayDate(dateKey)}</span>
+                        </button>
                       ))}
-                    </select>
-                  </div>
-
-                  <label className="label">Jour de consultation</label>
-                  <div className="booking-days-grid">
-                    {therapist.availableSlots.map(day => (
-                      <button
-                        key={day.day}
-                        className={`booking-day-btn ${selectedDate === `${day.day}-${weekOffset}` ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedDate(`${day.day}-${weekOffset}`);
-                          setSelectedTime('');
-                        }}
-                      >
-                        <span className="booking-day-name">{day.day}</span>
-                        <span className="booking-day-date">{getDayDateLabel(day.day)}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {selectedDate && (
-                    <div className="animate-fade-in">
-                      <label className="label" style={{ marginTop: 'var(--space-5)' }}>Heure disponible</label>
-                      <div className="booking-times-grid">
-                        {(therapist.availableSlots.find(d => `${d.day}-${weekOffset}` === selectedDate)?.slots || []).map(slot => (
-                          <button
-                            key={slot}
-                            className={`booking-time-btn ${selectedTime === slot ? 'selected' : ''}`}
-                            onClick={() => setSelectedTime(slot)}
-                          >
-                            {slot}
-                          </button>
-                        ))}
-                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Optional reason */}
-                <div className="booking-optional">
+                    {selectedDate && (
+                      <div className="animate-fade-in">
+                        <label className="label" style={{ marginTop: 'var(--space-5)' }}>Heure disponible</label>
+                        <div className="booking-times-grid">
+                          {timeSlotsForDate.map(slot => (
+                            <button
+                              key={slot.id}
+                              className={`booking-time-btn ${selectedSlot?.id === slot.id ? 'selected' : ''}`}
+                              onClick={() => setSelectedSlot(slot)}
+                            >
+                              {formatTime(slot.session_date)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Motif + Notes */}
+                <div className="booking-optional" style={{ marginTop: 'var(--space-6)' }}>
                   <label className="label">Motif de consultation (facultatif)</label>
-                  <select
-                    className="select"
-                    value={reason}
-                    onChange={e => setReason(e.target.value)}
-                  >
+                  <select className="select" value={reason} onChange={e => setReason(e.target.value)}>
                     <option value="">Choisir un motif...</option>
                     {REASONS.map(r => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>
-
                   <label className="label" style={{ marginTop: 'var(--space-4)' }}>Notes pour le thérapeute (facultatif)</label>
                   <textarea
                     className="textarea"
@@ -320,7 +304,7 @@ export default function BookingPage() {
               </div>
             )}
 
-            {/* ── SECTION ── */}
+            {/* ── Step 4: Summary ── */}
             {step === 4 && service && (
               <div className="animate-fade-in">
                 <h2 className="booking-step-title">Récapitulatif</h2>
@@ -331,7 +315,7 @@ export default function BookingPage() {
                     <div className="avatar avatar-md">{initials}</div>
                     <div>
                       <p className="font-bold">{therapist.name}</p>
-                      <p className="text-sm text-muted">{therapist.title}</p>
+                      <p className="text-sm text-muted">{therapist.specialization}</p>
                     </div>
                   </div>
 
@@ -349,13 +333,18 @@ export default function BookingPage() {
                     <div className="booking-summary-row">
                       <span>Mode</span>
                       <span className="font-semibold">
-                        {selectedMode === 'online' ? 'x En ligne' : 'x── En cabinet'}
+                        {selectedMode === 'online' ? '🎥 En ligne' : '🏥 En cabinet'}
                       </span>
                     </div>
                     <div className="booking-summary-row">
                       <span>Date & heure</span>
                       <span className="font-semibold">
-                        {selectedDate.replace('-', ' ')} mars à {selectedTime}
+                        {selectedSlot
+                          ? new Date(selectedSlot.session_date).toLocaleString('fr-FR', {
+                              weekday: 'long', day: 'numeric', month: 'long',
+                              hour: '2-digit', minute: '2-digit'
+                            })
+                          : '—'}
                       </span>
                     </div>
                     {reason && (
@@ -381,7 +370,7 @@ export default function BookingPage() {
               </div>
             )}
 
-            {/* Navigation buttons */}
+            {/* Navigation */}
             <div className="booking-nav">
               <button className="btn btn-outline" onClick={handleBack}>
                 <ChevronLeft size={16} />
@@ -390,40 +379,36 @@ export default function BookingPage() {
               <button
                 className="btn btn-primary"
                 onClick={handleNext}
-                disabled={!canProceed}
+                disabled={!canProceed || isSubmitting}
               >
                 {step === 4 ? (
-                  <>
-                    <Check size={16} />
-                    Confirmer & payer
-                  </>
+                  <><Check size={16} /> Confirmer & envoyer</>
                 ) : (
-                  <>
-                    Suivant
-                    <ChevronRight size={16} />
-                  </>
+                  <>Suivant <ChevronRight size={16} /></>
                 )}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Right - therapist summary */}
+        {/* Right sidebar */}
         <aside className="booking-aside">
           <div className="booking-aside-card card">
             <div className="booking-aside-header">
               <div className="avatar avatar-lg">{initials}</div>
               <div>
                 <p className="font-bold" style={{ fontSize: 'var(--font-size-base)' }}>{therapist.name}</p>
-                <p className="text-sm text-muted">{therapist.title}</p>
+                <p className="text-sm text-muted">{therapist.specialization}</p>
               </div>
             </div>
-            <div className="booking-aside-avail">
-              <span className="avail-dot" />
-              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-success)', fontWeight: 600 }}>
-                {therapist.availability}
-              </span>
-            </div>
+            {availableDates.length > 0 && (
+              <div className="booking-aside-avail">
+                <span className="avail-dot" />
+                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-success)', fontWeight: 600 }}>
+                  {availableDates.length} jour{availableDates.length > 1 ? 's' : ''} disponible{availableDates.length > 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
 
             {service && (
               <>
@@ -439,10 +424,10 @@ export default function BookingPage() {
                       <span>{selectedMode === 'online' ? 'En ligne' : 'En cabinet'}</span>
                     </div>
                   )}
-                  {selectedDate && selectedTime && (
+                  {selectedDate && selectedSlot && (
                     <div className="booking-aside-row">
                       <span>Créneau</span>
-                      <span>{selectedDate.replace('-', ' ')} · {selectedTime}</span>
+                      <span>{formatDayLabel(selectedDate)} · {formatTime(selectedSlot.session_date)}</span>
                     </div>
                   )}
                   <div className="booking-aside-price-row">

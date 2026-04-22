@@ -13,16 +13,8 @@ class PatientFile extends Model
         'client_id',
         'file_name',
         'file_type',
-        'upload_date',
         'content_url',
     ];
-
-    protected function casts(): array
-    {
-        return [
-            'upload_date' => 'datetime',
-        ];
-    }
 
     public function therapist()
     {

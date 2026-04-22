@@ -10,6 +10,17 @@ class Therapist extends Model
         'user_id',
         'specialization',
         'experience',
+        'bio',
+        'approach',
+        'education',
+        'languages',
+        'specialties'
+    ];
+
+    protected $casts = [
+        'education' => 'array',
+        'languages' => 'array',
+        'specialties' => 'array'
     ];
 
     public function user()
@@ -35,5 +46,10 @@ class Therapist extends Model
     public function files()
     {
         return $this->hasMany(PatientFile::class);
+    }
+
+    public function services()
+    {
+        return $this->hasMany(Service::class);
     }
 }

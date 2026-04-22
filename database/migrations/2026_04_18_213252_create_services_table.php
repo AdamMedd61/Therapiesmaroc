@@ -8,19 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('files', function (Blueprint $table) {
+        Schema::create('services', function (Blueprint $table) {
             $table->id();
             $table->foreignId('therapist_id')->constrained('therapists')->onDelete('cascade');
-            $table->foreignId('client_id')->constrained('clients')->onDelete('cascade');
-            $table->string('file_name');
-            $table->string('file_type');
-            $table->string('content_url');
-            $table->timestamps(); // created_at serves as upload timestamp
+            $table->string('name');
+            $table->string('duration');        // e.g. "50 min"
+            $table->decimal('price', 8, 2);
+            $table->string('mode');            // 'online' | 'cabinet' | 'both'
+            $table->timestamps();
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('files');
+        Schema::dropIfExists('services');
     }
 };

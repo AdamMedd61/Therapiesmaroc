@@ -1,0 +1,514 @@
+/* ============================================================
+   InboxPage — Full Reservation + Chat Styles
+   ============================================================ */
+
+.inbox-page {
+  background: var(--color-bg);
+  min-height: calc(100vh - var(--navbar-height));
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-6);
+}
+
+.h-100 { height: calc(100vh - var(--navbar-height) - var(--space-8)); }
+
+.inbox-container {
+  display: flex;
+  height: 100%;
+  min-height: 620px;
+  max-height: 820px;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+}
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+
+.inbox-sidebar {
+  width: 320px;
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.inbox-sidebar-header {
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.inbox-sidebar-header h2 {
+  font-size: var(--font-size-xl);
+  font-weight: 800;
+}
+
+/* ── Main Tabs (Chat / Reservations) ─────────────────────── */
+
+.inbox-main-tabs {
+  display: flex;
+  gap: var(--space-1);
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+
+.inbox-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  font-family: var(--font-base);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+  white-space: nowrap;
+}
+
+.inbox-tab-btn:hover {
+  color: var(--color-primary);
+}
+
+.inbox-tab-btn.active {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.inbox-notif-dot {
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ── Search bar ──────────────────────────────────────────── */
+
+.inbox-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-bg);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+.input-unstyled {
+  border: none;
+  background: transparent;
+  outline: none;
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-base);
+  color: var(--color-text);
+}
+
+/* ── Conversation list ───────────────────────────────────── */
+
+.inbox-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; }
+.inbox-list::-webkit-scrollbar { width: 5px; }
+.inbox-list::-webkit-scrollbar-thumb { background-color: var(--color-border); border-radius: 10px; }
+
+.inbox-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-bottom: 1px solid var(--color-bg);
+  position: relative;
+}
+
+.inbox-item:hover { background: var(--color-bg); }
+.inbox-item.active { background: var(--color-primary-bg); border-left: 3px solid var(--color-primary); }
+
+.inbox-item-content { flex: 1; min-width: 0; }
+.inbox-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+.inbox-item-header h4 { font-size: var(--font-size-sm); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.inbox-time { font-size: 10px; color: var(--color-text-muted); flex-shrink: 0; }
+
+.inbox-item-footer { display: flex; justify-content: space-between; align-items: center; }
+.inbox-preview { font-size: var(--font-size-xs); color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: var(--space-2); }
+.inbox-badge { background: var(--color-primary); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; flex-shrink: 0; }
+
+.online-indicator {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  background: var(--color-success);
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+}
+
+/* ── Reservation sidebar items ───────────────────────────── */
+
+.req-sidebar-item { cursor: default; }
+
+.req-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.req-dot-pending  { background: var(--color-warning); animation: pulse 2s ease-in-out infinite; }
+.req-dot-accepted { background: var(--color-success); }
+.req-dot-rejected { background: var(--color-error); }
+
+.req-avatar { background: var(--color-primary-muted); color: var(--color-primary); font-weight: 700; }
+.req-avatar-sm { width: 36px; height: 36px; font-size: var(--font-size-xs); background: var(--color-primary-muted); color: var(--color-primary); font-weight: 700; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; }
+.req-avatar-client { background: var(--color-accent-bg); color: var(--color-accent-dark); font-weight: 700; }
+
+.inbox-empty-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-6);
+  color: var(--color-text-muted);
+  text-align: center;
+  font-size: var(--font-size-sm);
+}
+
+/* ── Chat Area ───────────────────────────────────────────── */
+
+.inbox-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.chat-actions { display: flex; gap: var(--space-2); }
+
+.chat-messages {
+  flex: 1;
+  padding: var(--space-6);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.chat-messages::-webkit-scrollbar { width: 5px; }
+.chat-messages::-webkit-scrollbar-thumb { background-color: var(--color-border); border-radius: 10px; }
+
+.message-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  max-width: 72%;
+}
+
+.message-wrapper.sent { align-self: flex-end; flex-direction: row-reverse; }
+
+.message-bubble {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+}
+
+.received .message-bubble {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-bottom-left-radius: 4px;
+}
+
+.sent .message-bubble {
+  background: var(--color-primary);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.message-time {
+  display: block;
+  font-size: 10px;
+  margin-top: 5px;
+  opacity: 0.65;
+  text-align: right;
+}
+
+.chat-input-area {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.chat-input {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-base);
+  background: var(--color-bg);
+  transition: all var(--transition-fast);
+  outline: none;
+  color: var(--color-text);
+}
+
+.chat-input:focus {
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+.hover-primary:hover { color: var(--color-primary); background: var(--color-primary-bg); }
+
+/* ── Reservations Panel ──────────────────────────────────── */
+
+.reservations-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.reservations-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.reservations-header h3 {
+  font-size: var(--font-size-lg);
+  font-weight: 800;
+  color: var(--color-text);
+  margin-bottom: var(--space-1);
+}
+
+.reservations-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: #FFF4E5;
+  color: #8B5E00;
+  border: 1px solid #F4C46A;
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  flex-shrink: 0;
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+.reservations-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.reservations-list::-webkit-scrollbar { width: 5px; }
+.reservations-list::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 10px; }
+
+.reservations-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  text-align: center;
+  padding: var(--space-16) var(--space-8);
+  flex: 1;
+}
+
+.reservations-empty h4 {
+  font-size: var(--font-size-xl);
+  color: var(--color-text-secondary);
+}
+
+/* ── Reservation Cards ───────────────────────────────────── */
+
+.req-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--color-border);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.req-card:hover { box-shadow: var(--shadow-md); }
+
+.req-card-pending  { border-left: 4px solid var(--color-warning); }
+.req-card-accepted { border-left: 4px solid var(--color-success); }
+.req-card-rejected { border-left: 4px solid var(--color-error); opacity: 0.8; }
+
+.req-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.req-card-therapist {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.req-card-therapist h4 {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* ── Status Pill ─────────────────────────────────────────── */
+
+.req-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.status-pending  { background: #FFF4E5; color: #8B5E00; border: 1px solid #F4C46A; }
+.status-accepted { background: #D8F3DC; color: #1B4332; border: 1px solid #52B788; }
+.status-rejected { background: #FDECEA; color: #7B2D26; border: 1px solid #E57373; }
+
+/* ── Detail chips ────────────────────────────────────────── */
+
+.req-card-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.req-detail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* ── Notes ───────────────────────────────────────────────── */
+
+.req-notes {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--color-border);
+  line-height: 1.6;
+}
+
+/* ── Banner ──────────────────────────────────────────────── */
+
+.req-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.req-banner-pending  { background: #FFF4E5; color: #8B5E00; }
+.req-banner-accepted { background: #D8F3DC; color: #1B4332; }
+.req-banner-rejected { background: #FDECEA; color: #7B2D26; }
+
+/* ── Therapist Accept/Reject actions ─────────────────────── */
+
+.req-actions-row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.req-reject-btn {
+  flex: 1;
+  color: var(--color-error) !important;
+  border-color: var(--color-error) !important;
+}
+
+.req-reject-btn:hover {
+  background: #FDECEA !important;
+}
+
+.req-accept-btn {
+  flex: 1;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .inbox-container {
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 120px);
+    max-height: none;
+  }
+  .inbox-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+    max-height: 280px;
+  }
+  .inbox-chat { height: 100%; min-height: 400px; }
+}
+
+/* ── Avatar sizes ────────────────────────────────────────── */
+.avatar-xs { width: 28px; height: 28px; font-size: 10px; }

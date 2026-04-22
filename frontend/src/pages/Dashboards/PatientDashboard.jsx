@@ -1,63 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Calendar, Video, FileText, BookOpen, Settings, Sparkles, Clock, MapPin, Download, Play, CheckCircle2, TrendingUp, MessageSquare } from 'lucide-react';
+import { Calendar, Video, FileText, BookOpen, Settings, Sparkles, Clock, MapPin, Download, Play, CheckCircle2, TrendingUp, MessageSquare, Trash2, CheckCircle } from 'lucide-react';
+import api from '../../services/api';
+import { toast } from 'sonner';
 import './PatientDashboard.css';
 
-const upcomingSessions = [
-  {
-    id: '1',
-    therapist: 'Dr. Salma Benkirane',
-    therapistAvatar: null,
-    type: 'Consultation individuelle',
-    date: '14 Nov 2026',
-    time: '14:00',
-    mode: 'online',
-    status: 'confirmé',
-  },
-  {
-    id: '2',
-    therapist: 'Dr. Youssef Alami',
-    therapistAvatar: null,
-    type: 'Suivi psychologique',
-    date: '17 Nov 2026',
-    time: '16:00',
-    mode: 'cabinet',
-    status: 'confirmé',
-  },
-];
+const upcomingSessions = [];
 
-const myTherapists = [
-  { id: '1', name: 'Dr. Salma Benkirane', title: 'Psychologue Clinicienne' },
-  { id: '2', name: 'Dr. Youssef Alami', title: 'Psychiatre' },
-];
+const myTherapists = [];
 
-const advisingCourses = [
-  {
-    id: '1',
-    title: 'Gérer l\'anxiété au quotidien',
-    author: 'Dr. Salma Benkirane',
-    price: 250,
-    duration: '2 heures',
-    enrolled: false,
-  },
-  {
-    id: '2',
-    title: 'Communication en couple',
-    author: 'Dr. Youssef Alami',
-    price: 350,
-    duration: '3 heures',
-    enrolled: true,
-  },
-];
-
-const recentFiles = [
-  { id: '1', name: 'Notes de séance - Nov.pdf', therapist: 'Dr. Salma Benkirane', date: '10 Nov' },
-  { id: '2', name: 'Exercices de respiration.pdf', therapist: 'Dr. Salma Benkirane', date: '15 Oct' },
-];
+const advisingCourses = [];
+const recentFiles = [];
 
 export default function PatientDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('sessions');
+  const [upcomingSessions, setUpcomingSessions] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  const fetchSessions = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/requests');
+      setUpcomingSessions(res.data);
+    } catch (err) {
+      toast.error('Erreur de chargement des séances.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelRequest = async (id) => {
+    if (!window.confirm('Voulez-vous annuler cette demande ?')) return;
+    try {
+      await api.delete(`/requests/${id}`);
+      toast.success('Demande annulée.');
+      fetchSessions();
+    } catch (err) {
+      toast.error('Erreur lors de l’annulation.');
+    }
+  };
 
   return (
     <div className="dashboard-page">
@@ -77,7 +63,7 @@ export default function PatientDashboard() {
                 <Calendar size={24} />
               </div>
               <div className="stat-info">
-                <span className="stat-value">2</span>
+                <span className="stat-value">{upcomingSessions.length}</span>
                 <span className="stat-label">Séances à venir</span>
               </div>
             </div>
@@ -132,23 +118,24 @@ export default function PatientDashboard() {
             </div>
             
             <div className="sessions-list">
-              {upcomingSessions.map(session => (
-                <div key={session.id} className="card session-card">
+              {loading ? <div style={{ padding: '20px', textAlign: 'center' }}>Chargement...</div> : upcomingSessions.map(session => (
+                <div key={session.id} className="card session-card border" style={{ borderColor: session.status === 'accepted' ? 'var(--color-success)' : session.status === 'refused' ? 'var(--color-danger)' : 'var(--color-border)' }}>
                   <div className="session-card-main">
                     <div className="avatar avatar-lg">
-                      {session.therapistAvatar ? (
-                        <img src={session.therapistAvatar} alt={session.therapist} />
-                      ) : (
-                        <span>{session.therapist.split(' ').map(n => n[0]).join('')}</span>
-                      )}
+                      <span>{(session.therapist?.user?.name || 'Inconnu').split(' ').map(n => n[0]).join('')}</span>
                     </div>
                     <div className="session-info">
-                      <h3>{session.therapist}</h3>
-                      <p className="session-type">{session.type}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h3>{session.therapist?.user?.name || 'Inconnu'}</h3>
+                        {session.status === 'pending' && <span className="badge badge-warning-light">En attente</span>}
+                        {session.status === 'accepted' && <span className="badge badge-success-light"><CheckCircle size={12}/> Acceptée</span>}
+                        {session.status === 'refused' && <span className="badge badge-danger-light">Refusée</span>}
+                      </div>
+                      <p className="session-type">{session.schedule?.category || 'Consultation'}</p>
                       <div className="session-meta">
-                        <span className="badge badge-outline"><Calendar size={12} /> {session.date}</span>
-                        <span className="badge badge-outline"><Clock size={12} /> {session.time}</span>
-                        {session.mode === 'online' ? (
+                        <span className="badge badge-outline"><Calendar size={12} /> {new Date(session.schedule?.session_date).toLocaleDateString('fr-FR')}</span>
+                        <span className="badge badge-outline"><Clock size={12} /> {new Date(session.schedule?.session_date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        {session.schedule?.mode === 'online' ? (
                           <span className="badge badge-primary"><Video size={12} /> Vidéo</span>
                         ) : (
                           <span className="badge badge-accent"><MapPin size={12} /> En cabinet</span>
@@ -156,20 +143,36 @@ export default function PatientDashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="session-actions">
-                    {session.mode === 'online' && (
-                      <button className="btn btn-primary btn-full" onClick={() => navigate(`/appel?with=${encodeURIComponent(session.therapist)}&type=${encodeURIComponent(session.type)}`)}>
+                  <div className="session-card-actions">
+                    {session.schedule?.mode === 'online' && session.status === 'accepted' && (
+                      <button className="btn btn-primary btn-full" onClick={() => navigate(`/appel?with=${encodeURIComponent(session.therapist?.user?.name)}`)}>
                         <Video size={16} /> Rejoindre l'appel
                       </button>
                     )}
-                    <div className="session-actions-row">
-                      <button className="btn btn-outline flex-1">Déplacer</button>
-                      <button className="btn btn-outline flex-1 text-danger">Annuler</button>
-                    </div>
+                    
+                    {session.status === 'pending' && (
+                      <div className="session-actions-row">
+                        <button className="btn btn-outline flex-1 text-danger" onClick={() => cancelRequest(session.id)}>
+                          <Trash2 size={16} /> Annuler la demande
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
+            {!loading && upcomingSessions.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📅</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 8 }}>Aucune réservation pour le moment</h3>
+                <p style={{ color: 'var(--color-text-muted)', marginBottom: 24, maxWidth: 340, margin: '0 auto 24px' }}>
+                  Vous n'avez pas encore de séance planifiée. Trouvez un thérapeute et réservez votre première consultation.
+                </p>
+                <Link to="/therapeutes" className="btn btn-primary">
+                  <Calendar size={16} /> Trouver un thérapeute
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -196,6 +199,18 @@ export default function PatientDashboard() {
                 </div>
               ))}
             </div>
+            {myTherapists.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🌿</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 8 }}>Aucun thérapeute associé</h3>
+                <p style={{ color: 'var(--color-text-muted)', marginBottom: 24, maxWidth: 340, margin: '0 auto 24px' }}>
+                  Vous n'avez pas encore de thérapeute attitré. Explorez notre annuaire et prenez votre premier rendez-vous.
+                </p>
+                <Link to="/therapeutes" className="btn btn-primary">
+                  <Sparkles size={16} /> Parcourir l'annuaire
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -227,6 +242,15 @@ export default function PatientDashboard() {
                 </div>
               ))}
             </div>
+            {advisingCourses.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 8 }}>Aucun programme disponible</h3>
+                <p style={{ color: 'var(--color-text-muted)', maxWidth: 340, margin: '0 auto' }}>
+                  Les programmes recommandés par vos thérapeutes apparaîtront ici.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -247,6 +271,15 @@ export default function PatientDashboard() {
                 </div>
               ))}
             </div>
+            {recentFiles.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📄</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', marginBottom: 8 }}>Aucun document partagé</h3>
+                <p style={{ color: 'var(--color-text-muted)', maxWidth: 340, margin: '0 auto' }}>
+                  Les documents partagés par vos thérapeutes (notes, exercices, comptes rendus) apparaîtront ici.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

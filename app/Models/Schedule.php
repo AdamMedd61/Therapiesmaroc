@@ -12,6 +12,7 @@ class Schedule extends Model
         'category',
         'session_date',
         'mode',
+        'service_ids',
         'status',
     ];
 
@@ -19,6 +20,7 @@ class Schedule extends Model
     {
         return [
             'session_date' => 'datetime',
+            'service_ids'  => 'array',
         ];
     }
 

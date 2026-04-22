@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, User, Briefcase, Camera, Save, Upload, Calendar, Plus, X as XIcon } from 'lucide-react';
+import { ArrowLeft, User, Briefcase, Camera, Save, Upload, Calendar, Plus, X as XIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { specialtyList, languageList } from '../../data/therapists';
+import api from '../../services/api';
 import './TherapistSettings.css';
 
 const MODES_OPTIONS = [
@@ -23,23 +24,26 @@ export default function TherapistSettings() {
     name:    user?.name    || '',
     email:   user?.email   || '',
     tel:     user?.tel     || '',
-    city:    user?.city    || '',
+    city:    user?.location|| user?.city || '',
     address: user?.address || '',
   });
 
   /* ── Professional tab state ── */
+  const tData = user?.therapist || {};
   const [professional, setProfessional] = useState({
-    title:      user?.title      || '',
-    bio:        user?.bio        || '',
-    approach:   user?.approach   || '',
-    price:      user?.price      || '',
-    specialties: user?.specialties || [],
-    languages:   user?.languages  || [],
-    modes:       user?.modes      || [],
+    title:       tData.specialization || '',
+    bio:         tData.bio        || '',
+    approach:    tData.approach   || '',
+    specialties: tData.specialties || [],
+    languages:   tData.languages  || [],
+    modes:       [], // Not in therapist table directly, managed via services
+    education:   tData.education  || [],
   });
+  const [isSaving, setIsSaving] = useState(false);
 
   /* ── Avatar tab state ── */
-  const [avatarPreview, setAvatarPreview] = useState(user?.avatarUrl || null);
+  const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || user?.avatarUrl || null);
+  const [avatarFile, setAvatarFile] = useState(null);
 
   /* ── Planning tab state ── */
   const DAYS = [
@@ -87,22 +91,70 @@ export default function TherapistSettings() {
   };
 
   /* ── Save handlers ── */
-  const savePersonal = () => {
+  const savePersonal = async () => {
     if (!personal.name.trim() || !personal.email.trim()) {
       toast.error('Nom et email sont obligatoires.');
       return;
     }
-    updateUser(personal);
-    toast.success('Profil personnel mis à jour !');
+    try {
+      setIsSaving(true);
+      const res = await api.post('/profile', {
+        name: personal.name,
+        email: personal.email,
+        tel: personal.tel,
+        city: personal.city,
+        address: personal.address,
+      });
+      updateUser(res.data);
+      toast.success('Profil personnel mis à jour !');
+    } catch (error) {
+      console.error(error);
+      toast.error('Erreur lors de la mise à jour.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const saveProfessional = () => {
+  const saveProfessional = async () => {
     if (!professional.title.trim()) {
       toast.error('Le titre est obligatoire.');
       return;
     }
-    updateUser(professional);
-    toast.success('Profil professionnel mis à jour !');
+    
+    if (!user?.therapist?.id) {
+       toast.error('Impossible de trouver votre profil thérapeute.');
+       return;
+    }
+
+    try {
+      setIsSaving(true);
+      await api.put(`/therapists/${user.therapist.id}`, {
+         specialization: professional.title,
+         bio: professional.bio,
+         approach: professional.approach,
+         languages: professional.languages,
+         specialties: professional.specialties,
+         education: professional.education
+      });
+      // Update local context
+      updateUser({
+         therapist: {
+            ...user.therapist,
+            specialization: professional.title,
+            bio: professional.bio,
+            approach: professional.approach,
+            languages: professional.languages,
+            specialties: professional.specialties,
+            education: professional.education
+         }
+      });
+      toast.success('Profil professionnel mis à jour avec succès !');
+    } catch (error) {
+      console.error(error);
+      toast.error('Erreur lors de la mise à jour.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleFileChange = (e) => {
@@ -112,18 +164,39 @@ export default function TherapistSettings() {
       toast.error('La photo ne doit pas dépasser 5 Mo.');
       return;
     }
+    setAvatarFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => setAvatarPreview(ev.target.result);
     reader.readAsDataURL(file);
   };
 
-  const saveAvatar = () => {
-    if (!avatarPreview) {
+  const saveAvatar = async () => {
+    if (!avatarPreview && !avatarFile) {
       toast.error('Veuillez choisir une photo.');
       return;
     }
-    updateUser({ avatarUrl: avatarPreview });
-    toast.success('Photo de profil mise à jour !');
+    if (!avatarFile) {
+      toast.success('Photo de profil inchangée.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const formData = new FormData();
+      formData.append('avatar', avatarFile);
+
+      const res = await api.post('/profile', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      updateUser(res.data);
+      setAvatarFile(null);
+      toast.success('Photo de profil mise à jour !');
+    } catch (error) {
+      console.error(error);
+      toast.error('Erreur lors du téléchargement de la photo.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const initials = (user?.name || 'T')
@@ -240,8 +313,9 @@ export default function TherapistSettings() {
                 </div>
 
                 <div className="settings-save-bar">
-                  <button className="btn btn-primary" onClick={savePersonal}>
-                    <Save size={16} /> Enregistrer
+                  <button className="btn btn-primary" onClick={savePersonal} disabled={isSaving}>
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    Enregistrer
                   </button>
                 </div>
               </div>
@@ -288,19 +362,17 @@ export default function TherapistSettings() {
                   />
                 </div>
 
-                <div className="settings-row">
-                  <div className="settings-field">
-                    <label className="label">Prix par séance (MAD)</label>
-                    <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      value={professional.price}
-                      onChange={e => setProfessional(p => ({ ...p, price: e.target.value }))}
-                      placeholder="ex: 450"
-                    />
-                  </div>
+                <div className="settings-field">
+                  <label className="label">Formation & Certifications (séparées par virgule)</label>
+                  <input
+                    className="input"
+                    value={professional.education.join(', ')}
+                    onChange={e => setProfessional(p => ({ ...p, education: e.target.value.split(',').map(s => s.trim()).filter(s => s) }))}
+                    placeholder="ex: Master en psychologie clinique, Diplôme d'EMDR..."
+                  />
                 </div>
+
+
 
                 <div className="settings-field">
                   <label className="label">Spécialités</label>
@@ -351,8 +423,9 @@ export default function TherapistSettings() {
                 </div>
 
                 <div className="settings-save-bar">
-                  <button className="btn btn-primary" onClick={saveProfessional}>
-                    <Save size={16} /> Enregistrer
+                  <button className="btn btn-primary" onClick={saveProfessional} disabled={isSaving}>
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
+                    Enregistrer
                   </button>
                 </div>
               </div>
@@ -403,8 +476,8 @@ export default function TherapistSettings() {
                 </div>
 
                 <div className="settings-save-bar">
-                  <button className="btn btn-primary" onClick={saveAvatar}>
-                    <Save size={16} /> Enregistrer la photo
+                  <button className="btn btn-primary" onClick={saveAvatar} disabled={isSaving}>
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Enregistrer la photo
                   </button>
                 </div>
               </div>

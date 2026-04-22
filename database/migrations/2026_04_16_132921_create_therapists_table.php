@@ -16,6 +16,11 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->string('specialization');
             $table->integer('experience')->default(0);
+            $table->text('bio')->nullable();
+            $table->text('approach')->nullable();
+            $table->json('education')->nullable();
+            $table->json('languages')->nullable();
+            $table->json('specialties')->nullable();
             $table->timestamps();
         });
     }
