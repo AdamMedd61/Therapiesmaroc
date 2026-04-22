@@ -129,6 +129,10 @@ export default function TherapistDashboard() {
     api.get('/therapist/stats')
       .then(res => setStats(res.data))
       .catch(() => {});
+    // Load paid requests on mount for overview tab
+    api.get('/requests')
+      .then(res => setPaidRequests((res.data || []).filter(r => r.status === 'paid')))
+      .catch(() => {});
   }, []);
 
   // ── Paid requests (consultations tab) + payments (revenus tab) ──
@@ -627,34 +631,42 @@ export default function TherapistDashboard() {
                 </div>
 
                 <div className="t-sessions">
-                  {upcomingSessions.map(session => (
-                    <div key={session.id} className="t-session-line">
-                      <div className="t-session-left">
-                        <div className="t-session-time">{session.time}</div>
-                        <div className="t-session-client">
-                          <h4>{session.clientName}</h4>
-                          <p>{session.date} ⬢ {session.reason}</p>
+                  {(() => {
+                    const upcoming = paidRequests
+                      .filter(req => req.schedule?.session_date && new Date(req.schedule.session_date) >= new Date())
+                      .sort((a, b) => new Date(a.schedule.session_date) - new Date(b.schedule.session_date))
+                      .slice(0, 4);
+                    return upcoming.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--color-text-muted)' }}>
+                        <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
+                        <p style={{ fontWeight: 600, marginBottom: 4 }}>Aucune séance planifiée</p>
+                        <p style={{ fontSize: 13 }}>Vos prochaines consultations apparaîtront ici.</p>
+                      </div>
+                    ) : upcoming.map(req => {
+                      const date = new Date(req.schedule.session_date);
+                      const isToday = date.toDateString() === new Date().toDateString();
+                      return (
+                        <div key={req.id} className="t-session-line">
+                          <div className="t-session-left">
+                            <div className="t-session-time">{date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+                            <div className="t-session-client">
+                              <h4>{req.client?.user?.name || 'Patient'}</h4>
+                              <p>{isToday ? "Aujourd'hui" : date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} ⋄ {req.service?.name || 'Consultation'}</p>
+                            </div>
+                          </div>
+                          <div className="t-session-right">
+                            {req.schedule?.mode === 'online'
+                              ? <span className="t-session-badge online"><Video size={12}/> Vidéo</span>
+                              : <span className="t-session-badge cabinet">Cabinet</span>
+                            }
+                            {isToday && req.schedule?.mode === 'online' && (
+                              <button className="btn btn-primary btn-sm ml-2" onClick={() => navigate(`/appel?with=${encodeURIComponent(req.client?.user?.name || '')}&type=${encodeURIComponent(req.service?.name || '')}`)}>Lancer</button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="t-session-right">
-                        {session.type === 'online' ? (
-                          <span className="t-session-badge online"><Video size={12}/> Vidéo ({session.duration})</span>
-                        ) : (
-                          <span className="t-session-badge cabinet">Cabinet ({session.duration})</span>
-                        )}
-                        {session.date === "Aujourd'hui" && session.type === 'online' && (
-                          <button className="btn btn-primary btn-sm ml-2" onClick={() => navigate(`/appel?with=${encodeURIComponent(session.clientName)}&type=${encodeURIComponent(session.reason)}`)}>Lancer</button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {upcomingSessions.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--color-text-muted)' }}>
-                      <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
-                      <p style={{ fontWeight: 600, marginBottom: 4 }}>Aucune séance planifiée</p>
-                      <p style={{ fontSize: 13 }}>Vos prochaines consultations apparaîtront ici.</p>
-                    </div>
-                  )}
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
@@ -664,29 +676,44 @@ export default function TherapistDashboard() {
                 </div>
                 
                 <div className="t-clients">
-                  {recentClients.map(client => (
-                    <div key={client.id} className="t-client-line">
-                      <div className="t-client-info">
-                        <div className={`avatar ${client.avatar} font-bold`}>
-                          {client.name.substring(0,2)}
-                        </div>
-                        <div>
-                          <h4>{client.name}</h4>
-                          <p>Dernière séance: {client.lastSession}</p>
-                        </div>
+                  {(() => {
+                    const avatarColors = ['av-teal', 'av-blue', 'av-orange', 'av-purple', 'av-green'];
+                    const seen = new Set();
+                    const recentReal = paidRequests
+                      .sort((a, b) => new Date(b.schedule?.session_date) - new Date(a.schedule?.session_date))
+                      .filter(req => {
+                        const id = req.client_id;
+                        if (seen.has(id)) return false;
+                        seen.add(id); return true;
+                      })
+                      .slice(0, 4);
+                    return recentReal.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--color-text-muted)' }}>
+                        <div style={{ fontSize: 36, marginBottom: 10 }}>👤</div>
+                        <p style={{ fontWeight: 600, marginBottom: 4 }}>Aucun patient récent</p>
+                        <p style={{ fontSize: 13 }}>Vos patients apparaîtront ici après leur première séance.</p>
                       </div>
-                      <button className="btn btn-outline btn-sm icon-btn" onClick={() => navigate('/messagerie')} title="Envoyer un message">
-                        <MessageSquare size={16} />
-                      </button>
-                    </div>
-                  ))}
-                  {recentClients.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--color-text-muted)' }}>
-                      <div style={{ fontSize: 36, marginBottom: 10 }}>👤</div>
-                      <p style={{ fontWeight: 600, marginBottom: 4 }}>Aucun patient récent</p>
-                      <p style={{ fontSize: 13 }}>Vos patients apparaîtront ici après leur première séance.</p>
-                    </div>
-                  )}
+                    ) : recentReal.map((req, i) => {
+                      const name = req.client?.user?.name || 'Patient';
+                      const date = req.schedule?.session_date ? new Date(req.schedule.session_date) : null;
+                      return (
+                        <div key={req.id} className="t-client-line">
+                          <div className="t-client-info">
+                            <div className={`avatar ${avatarColors[i % avatarColors.length]} font-bold`}>
+                              {name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <h4>{name}</h4>
+                              <p>Dernière séance: {date ? date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}</p>
+                            </div>
+                          </div>
+                          <button className="btn btn-outline btn-sm icon-btn" onClick={() => navigate('/messagerie')} title="Envoyer un message">
+                            <MessageSquare size={16} />
+                          </button>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
