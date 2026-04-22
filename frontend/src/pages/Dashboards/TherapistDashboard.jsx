@@ -123,6 +123,37 @@ export default function TherapistDashboard() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [servicesLoading, setServicesLoading] = useState(false);
 
+  // ── Stats ──
+  const [stats, setStats] = useState({ sessions_this_month: 0, active_patients: 0, revenue_this_month: 0, avg_rating: null });
+  useEffect(() => {
+    api.get('/therapist/stats')
+      .then(res => setStats(res.data))
+      .catch(() => {});
+  }, []);
+
+  // ── Paid requests (consultations tab) + payments (revenus tab) ──
+  const [paidRequests, setPaidRequests] = useState([]);
+  const [paidReqLoading, setPaidReqLoading] = useState(false);
+  const [payments, setPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'sessions' && paidRequests.length === 0) {
+      setPaidReqLoading(true);
+      api.get('/requests')
+        .then(res => setPaidRequests((res.data || []).filter(r => r.status === 'paid')))
+        .catch(() => {})
+        .finally(() => setPaidReqLoading(false));
+    }
+    if (activeTab === 'earnings' && payments.length === 0) {
+      setPaymentsLoading(true);
+      api.get('/payments')
+        .then(res => setPayments(res.data || []))
+        .catch(() => {})
+        .finally(() => setPaymentsLoading(false));
+    }
+  }, [activeTab]);
+
   /* ── Planning state ── */
   const DAYS = [
     { id: 'lun', label: 'Lundi' },
@@ -558,29 +589,29 @@ export default function TherapistDashboard() {
               <div className="t-stat-card">
                 <div className="t-stat-icon bg-primary-light text-primary"><Calendar size={24} /></div>
                 <div className="t-stat-info">
-                  <span className="t-stat-label">Aujourd'hui</span>
-                  <div><span className="t-stat-value">0</span></div>
+                  <span className="t-stat-label">Séances ce mois</span>
+                  <div><span className="t-stat-value">{stats.sessions_this_month}</span></div>
                 </div>
               </div>
               <div className="t-stat-card">
                 <div className="t-stat-icon bg-blue-light text-blue"><Users size={24} /></div>
                 <div className="t-stat-info">
                   <span className="t-stat-label">Patients Actifs</span>
-                  <div><span className="t-stat-value">0</span></div>
+                  <div><span className="t-stat-value">{stats.active_patients}</span></div>
                 </div>
               </div>
               <div className="t-stat-card">
                 <div className="t-stat-icon bg-green-light text-green"><DollarSign size={24} /></div>
                 <div className="t-stat-info">
                   <span className="t-stat-label">Revenus (Mois)</span>
-                  <div><span className="t-stat-value">0</span></div>
+                  <div><span className="t-stat-value">{stats.revenue_this_month.toFixed(2)} €</span></div>
                 </div>
               </div>
               <div className="t-stat-card">
                 <div className="t-stat-icon bg-orange-light text-orange"><Star size={24} /></div>
                 <div className="t-stat-info">
                   <span className="t-stat-label">Note Moyenne</span>
-                  <div><span className="t-stat-value">0.0</span></div>
+                  <div><span className="t-stat-value">{stats.avg_rating ?? '—'}</span></div>
                 </div>
               </div>
             </div>
@@ -668,69 +699,60 @@ export default function TherapistDashboard() {
           <div className="animate-fade-in-up">
             <div className="t-section-title" style={{ marginBottom: 'var(--space-4)' }}>
               <h3>Toutes les consultations</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <span className="badge badge-primary-light">{sessions.length} à venir</span>
-                <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>
-                  <Plus size={15} /> Nouvelle séance
-                </button>
-              </div>
-            </div>
-            <div className="t-sessions">
-              {sessions.map(session => (
-                <div key={session.id} className="t-session-line">
-                  <div className="t-session-left">
-                    <div className="t-session-time">{session.time}</div>
-                    <div className="t-session-client">
-                      <h4>{session.clientName}</h4>
-                      <p>{session.date} · {session.reason} · {session.duration}</p>
-                    </div>
-                  </div>
-                  <div className="t-session-right">
-                    {session.type === 'online' ? (
-                      <span className="t-session-badge online"><Video size={12}/> Vidéo</span>
-                    ) : (
-                      <span className="t-session-badge cabinet">Cabinet</span>
-                    )}
-                    {session.type === 'online' && (
-                      <button className="btn btn-primary btn-sm ml-2" onClick={() => navigate(`/appel?with=${encodeURIComponent(session.clientName)}&type=${encodeURIComponent(session.reason)}`)}>Lancer</button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {sessions.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px 24px' }}>
-                  <div style={{ fontSize: 44, marginBottom: 12 }}>📵</div>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>Aucune consultation à venir</h3>
-                  <p style={{ color: 'var(--color-text-muted)', marginBottom: 20, maxWidth: 320, margin: '0 auto 20px' }}>Vous n'avez pas encore de séance planifiée. Ajoutez-en une manuellement ou attendez qu'un patient réserve.</p>
-                  <button className="btn btn-primary" onClick={() => setModalOpen(true)}><Plus size={15} /> Nouvelle séance</button>
-                </div>
-              )}
+              <span className="badge badge-primary-light">{paidRequests.length} séances</span>
             </div>
 
-            <div className="t-section-title" style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>
-              <h3>Séances passées</h3>
-            </div>
-            <div className="t-sessions">
-              {[].map(session => (
-                <div key={session.id} className="t-session-line" style={{ opacity: 0.7 }}>
-                  <div className="t-session-left">
-                    <div className="t-session-time" style={{ color: 'var(--color-text-muted)' }}>{session.time}</div>
-                    <div className="t-session-client">
-                      <h4>{session.clientName}</h4>
-                      <p>{session.date} · {session.reason} · {session.duration}</p>
-                    </div>
-                  </div>
-                  <div className="t-session-right">
-                    <span className="badge badge-outline">Terminée</span>
-                  </div>
-                </div>
-              ))}
-              <div style={{ textAlign: 'center', padding: '32px 24px', color: 'var(--color-text-muted)' }}>
-                <p style={{ fontSize: 13 }}>L'historique de vos consultations apparaîtra ici.</p>
+            {paidReqLoading ? (
+              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)' }}>Chargement...</div>
+            ) : paidRequests.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>📵</div>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>Aucune consultation confirmée</h3>
+                <p style={{ color: 'var(--color-text-muted)', maxWidth: 320, margin: '0 auto' }}>Les séances payées par vos patients apparaîtront ici.</p>
               </div>
-            </div>
+            ) : (
+              <div className="t-sessions">
+                {paidRequests.map(req => {
+                  const date = req.schedule?.session_date ? new Date(req.schedule.session_date) : null;
+                  const isPast = date && date < new Date();
+                  return (
+                    <div key={req.id} className="t-session-line" style={isPast ? { opacity: 0.75 } : {}}>
+                      <div className="t-session-left">
+                        <div className="t-session-time" style={isPast ? { color: 'var(--color-text-muted)' } : {}}>
+                          {date ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </div>
+                        <div className="t-session-client">
+                          <h4>{req.client?.user?.name || 'Patient'}</h4>
+                          <p>
+                            {date ? date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'}
+                            {' · '}{req.service?.name || 'Consultation'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="t-session-right">
+                        {req.schedule?.mode === 'online'
+                          ? <span className="t-session-badge online"><Video size={12}/> Vidéo</span>
+                          : <span className="t-session-badge cabinet">Cabinet</span>
+                        }
+                        {isPast
+                          ? <span className="badge badge-outline" style={{ marginLeft: 8 }}>Terminée</span>
+                          : req.schedule?.mode === 'online' && (
+                              <button
+                                className="btn btn-primary btn-sm ml-2"
+                                onClick={() => navigate(`/appel?with=${encodeURIComponent(req.client?.user?.name || '')}&type=${encodeURIComponent(req.service?.name || '')}`)}
+                              >Lancer</button>
+                            )
+                        }
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
+
+
 
         {/* ── Dossiers Patients tab ── */}
         {activeTab === 'clients' && (
@@ -831,9 +853,9 @@ export default function TherapistDashboard() {
             {/* Stat cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
               {[
-                { icon: <DollarSign size={22} />, label: 'Ce mois', value: '0', unit: 'MAD', trend: null, trendUp: null, iconBg: '#d1fae5', iconColor: '#065f46' },
-                { icon: <Calendar size={22} />, label: 'Cette semaine', value: '0', unit: 'MAD', trend: null, trendUp: null, iconBg: '#dbeafe', iconColor: '#1e40af' },
-                { icon: <Star size={22} />, label: 'Séances ce mois', value: '0', unit: '', trend: null, trendUp: null, iconBg: '#fef3c7', iconColor: '#92400e' },
+                { icon: <DollarSign size={22} />, label: 'Ce mois', value: `${stats.revenue_this_month.toFixed(2)} €`, iconBg: '#d1fae5', iconColor: '#065f46' },
+                { icon: <Calendar size={22} />, label: 'Séances ce mois', value: stats.sessions_this_month, iconBg: '#dbeafe', iconColor: '#1e40af' },
+                { icon: <DollarSign size={22} />, label: 'Total encaissé', value: `${payments.reduce((s, p) => s + parseFloat(p.amount || 0), 0).toFixed(2)} €`, iconBg: '#fef3c7', iconColor: '#92400e' },
               ].map((stat, i) => (
                 <div key={i} style={{
                   background: 'var(--color-surface)',
@@ -844,27 +866,12 @@ export default function TherapistDashboard() {
                   alignItems: 'center',
                   gap: 16,
                 }}>
-                  <div style={{
-                    width: 48, height: 48, borderRadius: 12,
-                    background: stat.iconBg, color: stat.iconColor,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 12, background: stat.iconBg, color: stat.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {stat.icon}
                   </div>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                      {stat.label}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                      <span style={{ fontSize: 26, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1 }}>{stat.value}</span>
-                      {stat.unit && <span style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 500 }}>{stat.unit}</span>}
-                      {stat.trend && (
-                        <span style={{ fontSize: 12, fontWeight: 700, color: stat.trendUp ? '#059669' : '#dc2626', background: stat.trendUp ? '#d1fae5' : '#fee2e2', padding: '2px 7px', borderRadius: 999 }}>
-                          {stat.trend}
-                        </span>
-                      )}
-                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{stat.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1 }}>{stat.value}</div>
                   </div>
                 </div>
               ))}
@@ -873,19 +880,42 @@ export default function TherapistDashboard() {
             {/* Payment list */}
             <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Détail des paiements</h3>
-              <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>5 transactions récentes</span>
+              <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{payments.length} transaction{payments.length !== 1 ? 's' : ''}</span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[].map((p, i) => (
-                <div key={i}>dummy</div>
-              ))}
+            {paymentsLoading ? (
+              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)' }}>Chargement...</div>
+            ) : payments.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 24px' }}>
                 <div style={{ fontSize: 44, marginBottom: 12 }}>💳</div>
                 <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>Aucune transaction</h3>
                 <p style={{ color: 'var(--color-text-muted)', maxWidth: 320, margin: '0 auto' }}>L'historique de vos paiements apparaîtra ici dès que vous aurez des séances facturées.</p>
               </div>
-            </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {payments.map((p, i) => {
+                  const paidAt = p.paid_at ? new Date(p.paid_at) : null;
+                  return (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                      borderRadius: 12, padding: '14px 20px', gap: 16,
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>{p.client?.user?.name || 'Patient'}</div>
+                        <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                          {paidAt ? paidAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--color-primary)' }}>{parseFloat(p.amount).toFixed(2)} €</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#d1fae5', color: '#065f46', textTransform: 'uppercase' }}>Payé</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
         {/* ── Planning tab ── */}
@@ -1169,27 +1199,39 @@ export default function TherapistDashboard() {
                     {(planning[d.id] || []).length === 0 ? (
                       <span className="planning-empty">Aucun créneau</span>
                     ) : (
-                      (planning[d.id] || []).map(slot => (
-                        <div key={slot.id} className="planning-slot-chip">
-                          <button
-                            className="planning-chip-label"
-                            onClick={weekOffset >= 0 ? () => startEdit(slot) : undefined}
-                            title={weekOffset >= 0 ? "Cliquer pour modifier" : ""}
-                            style={{ cursor: weekOffset < 0 ? 'default' : 'pointer' }}
+                      (planning[d.id] || []).map(slot => {
+                        const isBooked = slot.status === 'booked';
+                        return (
+                          <div
+                            key={slot.id}
+                            className="planning-slot-chip"
+                            style={isBooked ? {
+                              background: 'rgba(15,15,15,0.7)',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              opacity: 0.85,
+                            } : {}}
                           >
-                            {slot.startTime}
-                          </button>
-                          {weekOffset >= 0 && (
                             <button
-                              className="planning-slot-remove"
-                              onClick={() => removeSlot(d.id, slot.id)}
-                              title="Supprimer"
+                              className="planning-chip-label"
+                              onClick={!isBooked && weekOffset >= 0 ? () => startEdit(slot) : undefined}
+                              title={isBooked ? 'Créneau réservé — non modifiable' : (weekOffset >= 0 ? 'Cliquer pour modifier' : '')}
+                              style={{ cursor: isBooked || weekOffset < 0 ? 'default' : 'pointer', gap: 4 }}
                             >
-                              <X size={12} />
+                              {isBooked && <span style={{ fontSize: 10 }}>🔒</span>}
+                              {slot.startTime}
                             </button>
-                          )}
-                        </div>
-                      ))
+                            {weekOffset >= 0 && !isBooked && (
+                              <button
+                                className="planning-slot-remove"
+                                onClick={() => removeSlot(d.id, slot.id)}
+                                title="Supprimer"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

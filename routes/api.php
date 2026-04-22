@@ -22,6 +22,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReviewController;
 
 use App\Http\Controllers\ServiceController;
+use App\Http\Controllers\TherapistStatsController;
 
 Route::get('/therapists', [TherapistController::class, 'index']);           // Public: list therapists with available slots
 Route::get('/therapists/{id}', [TherapistController::class, 'show']);      // Public: single therapist profile
@@ -45,4 +46,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/payments/checkout', [PaymentController::class, 'createCheckout']);
     Route::post('/payments/confirm-checkout', [PaymentController::class, 'confirmCheckout']);
     Route::get('/payments', [PaymentController::class, 'index']);
+
+    // Therapist stats
+    Route::get('/therapist/stats', [TherapistStatsController::class, 'index']);
 });
