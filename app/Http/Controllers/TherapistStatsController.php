@@ -41,6 +41,7 @@ class TherapistStatsController extends Controller
                 $q->where('therapist_id', $therapist->id)
                   ->whereBetween('session_date', [$startOfMonth, $endOfMonth]);
             })
+            ->where('status', 'paid')
             ->sum('amount');
 
         // ── Average rating ──

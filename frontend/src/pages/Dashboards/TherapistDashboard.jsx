@@ -911,7 +911,7 @@ export default function TherapistDashboard() {
               {[
                 { icon: <DollarSign size={22} />, label: 'Ce mois', value: `${stats.revenue_this_month.toFixed(2)} €`, iconBg: '#d1fae5', iconColor: '#065f46' },
                 { icon: <Calendar size={22} />, label: 'Séances ce mois', value: stats.sessions_this_month, iconBg: '#dbeafe', iconColor: '#1e40af' },
-                { icon: <DollarSign size={22} />, label: 'Total encaissé', value: `${payments.reduce((s, p) => s + parseFloat(p.amount || 0), 0).toFixed(2)} €`, iconBg: '#fef3c7', iconColor: '#92400e' },
+                { icon: <DollarSign size={22} />, label: 'Total encaissé', value: `${payments.filter(p => p.status === 'paid').reduce((s, p) => s + parseFloat(p.amount || 0), 0).toFixed(2)} €`, iconBg: '#fef3c7', iconColor: '#92400e' },
               ].map((stat, i) => (
                 <div key={i} style={{
                   background: 'var(--color-surface)',

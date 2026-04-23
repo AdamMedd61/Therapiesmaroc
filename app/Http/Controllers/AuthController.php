@@ -92,7 +92,7 @@ class AuthController extends Controller
             'tel' => 'sometimes|nullable|string|max:20',
             'city' => 'sometimes|nullable|string|max:100',
             'address' => 'sometimes|nullable|string|max:255',
-            'avatar' => 'sometimes|nullable|image|max:5120', // 5MB max
+            'avatar' => 'sometimes|nullable|image|max:5120',
         ]);
 
         if ($request->has('city')) {
