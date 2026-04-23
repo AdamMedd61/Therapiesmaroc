@@ -744,69 +744,208 @@ export default function TherapistDashboard() {
         )}
 
         {/* ── Consultations tab ── */}
-        {activeTab === 'sessions' && (
-          <div className="animate-fade-in-up">
-            <div className="t-section-title" style={{ marginBottom: 'var(--space-4)' }}>
-              <h3>Toutes les consultations</h3>
-              <span className="badge badge-primary-light">{paidRequests.length} séances</span>
-            </div>
+        {activeTab === 'sessions' && (() => {
+          // ── local filter state (hoisted via ref so it doesn't reset on re-render) ──
+          const [cSearch,  setCSearch]  = React.useState('');
+          const [cPeriod,  setCPeriod]  = React.useState('all');   // all | today | week | month
+          const [cMode,    setCMode]    = React.useState('all');   // all | online | cabinet
 
-            {paidReqLoading ? (
-              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)' }}>Chargement...</div>
-            ) : paidRequests.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 24px' }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>📵</div>
-                <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>Aucune consultation confirmée</h3>
-                <p style={{ color: 'var(--color-text-muted)', maxWidth: 320, margin: '0 auto' }}>Les séances payées par vos patients apparaîtront ici.</p>
+          const now  = new Date();
+          const sow  = new Date(now); sow.setDate(now.getDate() - now.getDay() + 1); sow.setHours(0,0,0,0);
+          const eow  = new Date(sow); eow.setDate(sow.getDate() + 6); eow.setHours(23,59,59,999);
+          const som  = new Date(now.getFullYear(), now.getMonth(), 1);
+          const eom  = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+          const filtered = paidRequests
+            .filter(req => {
+              const d = req.schedule?.session_date ? new Date(req.schedule.session_date) : null;
+              const name = (req.client?.user?.name || '').toLowerCase();
+              if (cSearch && !name.includes(cSearch.toLowerCase())) return false;
+              if (cMode === 'online'  && req.schedule?.mode !== 'online')  return false;
+              if (cMode === 'cabinet' && req.schedule?.mode !== 'cabinet') return false;
+              if (!d) return cPeriod === 'all';
+              if (cPeriod === 'today') return d.toDateString() === now.toDateString();
+              if (cPeriod === 'week')  return d >= sow && d <= eow;
+              if (cPeriod === 'month') return d >= som && d <= eom;
+              return true;
+            })
+            .sort((a, b) => new Date(a.schedule?.session_date) - new Date(b.schedule?.session_date));
+
+          // Group by date key
+          const groups = {};
+          filtered.forEach(req => {
+            const d = req.schedule?.session_date ? new Date(req.schedule.session_date) : null;
+            const key = d ? d.toDateString() : 'no-date';
+            if (!groups[key]) groups[key] = { label: '', items: [], date: d };
+            if (d) {
+              const isToday    = d.toDateString() === now.toDateString();
+              const tomorrow   = new Date(now); tomorrow.setDate(now.getDate() + 1);
+              const isTomorrow = d.toDateString() === tomorrow.toDateString();
+              groups[key].label = isToday
+                ? "Aujourd'hui"
+                : isTomorrow
+                  ? 'Demain'
+                  : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+            } else {
+              groups[key].label = 'Date inconnue';
+            }
+            groups[key].items.push(req);
+          });
+
+          const upcoming = filtered.filter(r => r.schedule?.session_date && new Date(r.schedule.session_date) >= now).length;
+          const past     = filtered.filter(r => r.schedule?.session_date && new Date(r.schedule.session_date) <  now).length;
+
+          const filterBtnStyle = (active) => ({
+            padding: '6px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '1px solid',
+            background:   active ? 'var(--color-primary)' : 'transparent',
+            color:        active ? '#fff' : 'var(--color-text-muted)',
+            borderColor:  active ? 'var(--color-primary)' : 'var(--color-border)',
+            transition: 'all 0.15s',
+          });
+
+          return (
+            <div className="animate-fade-in-up">
+
+              {/* ── Header ── */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>Consultations</h3>
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--color-text-muted)' }}>
+                      <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>{upcoming}</span> à venir &nbsp;·&nbsp; {past} passées
+                    </p>
+                  </div>
+                  {/* Search */}
+                  <div style={{ position: 'relative', flex: '0 0 220px' }}>
+                    <input
+                      type="text"
+                      placeholder="Rechercher un patient…"
+                      value={cSearch}
+                      onChange={e => setCSearch(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 999, border: '1px solid var(--color-border)', fontSize: 13, outline: 'none', background: 'var(--color-surface)', color: 'var(--color-text)', boxSizing: 'border-box' }}
+                    />
+                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', pointerEvents: 'none' }}>🔍</span>
+                  </div>
+                </div>
+
+                {/* Filter rows */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {/* Period */}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {[['all','Tout'], ['today',"Aujourd'hui"], ['week','Cette semaine'], ['month','Ce mois']].map(([v,l]) => (
+                      <button key={v} style={filterBtnStyle(cPeriod === v)} onClick={() => setCPeriod(v)}>{l}</button>
+                    ))}
+                  </div>
+                  <div style={{ width: 1, height: 24, background: 'var(--color-border)', margin: '0 4px' }} />
+                  {/* Mode */}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[['all','Tous'], ['online','📹 Vidéo'], ['cabinet','🏢 Cabinet']].map(([v,l]) => (
+                      <button key={v} style={filterBtnStyle(cMode === v)} onClick={() => setCMode(v)}>{l}</button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className="t-sessions">
-                {paidRequests.map(req => {
-                  const date = req.schedule?.session_date ? new Date(req.schedule.session_date) : null;
-                  const isPast = date && date < new Date();
-                  return (
-                    <div key={req.id} className="t-session-line" style={isPast ? { opacity: 0.75 } : {}}>
-                      <div className="t-session-left">
-                        <div className="t-session-time" style={isPast ? { color: 'var(--color-text-muted)' } : {}}>
-                          {date ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+
+              {/* ── Loading / Empty ── */}
+              {paidReqLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>Chargement…</div>
+              ) : filtered.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>📅</div>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>Aucune consultation trouvée</h3>
+                  <p style={{ color: 'var(--color-text-muted)', maxWidth: 320, margin: '0 auto' }}>Essayez de modifier les filtres ou la période sélectionnée.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                  {Object.values(groups).map(group => {
+                    const isToday = group.date && group.date.toDateString() === now.toDateString();
+                    return (
+                      <div key={group.label}>
+                        {/* Day header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                          <div style={{
+                            fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em',
+                            color: isToday ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                          }}>{group.label}</div>
+                          <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600 }}>{group.items.length} séance{group.items.length > 1 ? 's' : ''}</div>
                         </div>
-                        <div className="t-session-client">
-                          <h4>{req.client?.user?.name || 'Patient'}</h4>
-                          <p>
-                            {date ? date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'}
-                            {' · '}{req.service?.name || 'Consultation'}
-                          </p>
+
+                        {/* Cards */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {group.items.map(req => {
+                            const d    = req.schedule?.session_date ? new Date(req.schedule.session_date) : null;
+                            const past = d && d < now;
+                            const hrs  = d ? (d - now) / 36e5 : Infinity;
+                            const locked = hrs < 48 && !past;
+                            const name = req.client?.user?.name || 'Patient';
+                            const initials = name.substring(0, 2).toUpperCase();
+                            const avatarBgs = ['#d1fae5','#dbeafe','#fef3c7','#fce7f3','#ede9fe'];
+                            const avatarColors2 = ['#065f46','#1e40af','#92400e','#9d174d','#5b21b6'];
+                            const ci = (req.client_id || 0) % 5;
+
+                            return (
+                              <div key={req.id} style={{
+                                display: 'flex', alignItems: 'center', gap: 16,
+                                background: 'var(--color-surface)', border: `1px solid ${isToday && !past ? 'var(--color-primary-light, #a7d7b8)' : 'var(--color-border)'}`,
+                                borderLeft: isToday && !past ? '4px solid var(--color-primary)' : '4px solid transparent',
+                                borderRadius: 14, padding: '14px 20px',
+                                opacity: past ? 0.65 : 1,
+                                transition: 'box-shadow 0.15s',
+                              }}
+                                onMouseOver={e => !past && (e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)')}
+                                onMouseOut={e => (e.currentTarget.style.boxShadow = 'none')}
+                              >
+                                {/* Time block */}
+                                <div style={{ textAlign: 'center', minWidth: 52, flexShrink: 0 }}>
+                                  <div style={{ fontSize: 18, fontWeight: 800, color: past ? 'var(--color-text-muted)' : 'var(--color-text)', lineHeight: 1 }}>
+                                    {d ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                  </div>
+                                </div>
+
+                                {/* Divider */}
+                                <div style={{ width: 1, height: 44, background: 'var(--color-border)', flexShrink: 0 }} />
+
+                                {/* Avatar */}
+                                <div style={{ width: 42, height: 42, borderRadius: '50%', background: avatarBgs[ci], color: avatarColors2[ci], fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {initials}
+                                </div>
+
+                                {/* Patient info */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-text)', marginBottom: 3 }}>{name}</div>
+                                  <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{req.service?.name || 'Consultation'}</div>
+                                </div>
+
+                                {/* Mode badge */}
+                                {req.schedule?.mode === 'online'
+                                  ? <span className="t-session-badge online"><Video size={12}/> Vidéo</span>
+                                  : <span className="t-session-badge cabinet">Cabinet</span>
+                                }
+
+                                {/* Status / Action */}
+                                {past ? (
+                                  <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 999, background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb' }}>Terminée</span>
+                                ) : (
+                                  <button
+                                    style={{ fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 999, border: '1px solid', background: locked ? '#f9fafb' : '#fef2f2', color: locked ? '#9ca3af' : '#dc2626', borderColor: locked ? '#e5e7eb' : '#fca5a5', cursor: locked ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                                    disabled={locked}
+                                    title={locked ? 'Annulation impossible moins de 48h avant la séance' : 'Annuler cette séance'}
+                                    onClick={() => !locked && cancelSession(req.id)}
+                                  >Annuler</button>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                      <div className="t-session-right">
-                        {req.schedule?.mode === 'online'
-                          ? <span className="t-session-badge online"><Video size={12}/> Vidéo</span>
-                          : <span className="t-session-badge cabinet">Cabinet</span>
-                        }
-                        {isPast
-                          ? <span className="badge badge-outline" style={{ marginLeft: 8 }}>Terminée</span>
-                          : (() => {
-                              const hoursUntil = (new Date(req.schedule?.session_date) - new Date()) / 36e5;
-                              const locked = hoursUntil < 48;
-                              return (
-                                <button
-                                  className="btn btn-sm ml-2"
-                                  style={{ background: locked ? '#f3f4f6' : '#fee2e2', color: locked ? '#9ca3af' : '#dc2626', border: '1px solid', borderColor: locked ? '#e5e7eb' : '#fca5a5', cursor: locked ? 'not-allowed' : 'pointer', fontWeight: 600 }}
-                                  disabled={locked}
-                                  title={locked ? 'Annulation impossible moins de 48h avant la séance' : 'Annuler cette séance'}
-                                  onClick={() => !locked && cancelSession(req.id)}
-                                >Annuler</button>
-                              );
-                            })()
-                        }
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
 
 
@@ -965,7 +1104,13 @@ export default function TherapistDashboard() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--color-primary)' }}>{parseFloat(p.amount).toFixed(2)} €</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#d1fae5', color: '#065f46', textTransform: 'uppercase' }}>Payé</span>
+                        {p.status === 'refunded' ? (
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#f3f4f6', color: '#4b5563', textTransform: 'uppercase', border: '1px solid #d1d5db' }}>Remboursé</span>
+                        ) : p.status === 'failed' ? (
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#fee2e2', color: '#991b1b', textTransform: 'uppercase' }}>Échoué</span>
+                        ) : (
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#d1fae5', color: '#065f46', textTransform: 'uppercase' }}>Payé</span>
+                        )}
                       </div>
                     </div>
                   );
